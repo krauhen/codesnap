@@ -25,14 +25,20 @@ class Snapshot:
 class CodeSnapshotter:
     """Main class for creating code snapshots."""
 
-    def __init__(self, root_path: Path, language: Language, config: Optional[Config] = None):
+    def __init__(
+        self,
+        root_path: Path,
+        language: Language,
+        config: Optional[Config] = None,
+        mode_encoding: Optional[str] = "o200k_base",
+    ):
         """Initialize the snapshotter."""
         self.root_path = root_path.resolve()
         self.language = language
         self.config = config or Config()
         self.filter = FileFilter(self.root_path, self.language, self.config)
         self.formatter = SnapshotFormatter(self.root_path, self.language)
-        self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        self.tokenizer = tiktoken.get_encoding(mode_encoding)
 
     def create_snapshot(
         self, max_tokens: Optional[int] = None, show_tree: bool = True

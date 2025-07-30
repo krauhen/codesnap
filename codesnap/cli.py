@@ -29,6 +29,11 @@ console = Console()
 @click.option("-o", "--output", type=click.Path(), help="Output file (stdout if not specified)")
 @click.option(
     "-c", "--clipboard", is_flag=True, help="Copy output to clipboard instead of stdout"
+    "--model-encoding",
+    type=click.Choice(["cl100k_base", "o200k_base"], case_sensitive=False),
+    help="Encoding that the models use to create tokens.",
+    default="o200k_base",
+    show_default=True,
 )
 @click.option("--max-tokens", type=int, help="Maximum tokens to include")
 @click.option("--no-tree", is_flag=True, help="Skip directory tree")
@@ -41,6 +46,7 @@ def main(
     output: Optional[str],
     clipboard: bool,
     max_tokens: Optional[int],
+    model_encoding: Optional[str],
     no_tree: bool,
     ignore: tuple[str, ...],
     include_ext: tuple[str, ...],
@@ -74,7 +80,7 @@ def main(
 
         # Create snapshotter
         lang_enum = Language(language.lower())
-        snapshotter = CodeSnapshotter(path, lang_enum, config)
+        snapshotter = CodeSnapshotter(path, lang_enum, config, model_encoding)
 
         # Generate snapshot
         with console.status("[bold blue]Generating code snapshot..."):
