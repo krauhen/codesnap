@@ -492,3 +492,48 @@ def test_snapshot_with_no_header_footer(temp_project):
 
     # But should still contain file content
     assert "main.py" in snapshot.content
+
+
+def test_create_snapshot_json(tmp_path):
+    root = tmp_path
+    (root / "main.py").write_text("print(1)")
+    cs = CodeSnapshotter(root, Language.PYTHON)
+    snap = cs.create_snapshot(output_format=cs.formatter.output_format.JSON)
+    assert '"project"' in snap.content
+
+
+def test_count_tokens_returns_estimate_if_not_counting(tmp_path):
+    cs = CodeSnapshotter(tmp_path, Language.PYTHON, count_tokens=False)
+    num = cs._count_tokens("abcd" * 40)
+    # estimate, so just check integer and expected rough value
+    assert isinstance(num, int)
+    assert num > 0
+
+
+def test_build_tree_handles_permission_error(tmp_path, monkeypatch):
+    cs = CodeSnapshotter(tmp_path, Language.PYTHON)
+    d = tmp_path / "dir"
+    d.mkdir()
+    # Simulate permission error
+    real_iterdir = Path.iterdir
+
+    def perm_error(self):
+        raise PermissionError("No access")
+
+    monkeypatch.setattr(Path, "iterdir", perm_error)
+    cs._build_tree()
+    monkeypatch.setattr(Path, "iterdir", real_iterdir)
+
+
+def test_snapshot_with_import_analysis(tmp_path):
+    from codesnap.analyzer import ImportAnalyzer
+
+    # create 2 files with imports
+    (tmp_path / "a.py").write_text("import b")
+    (tmp_path / "b.py").write_text("")
+    cs = CodeSnapshotter(tmp_path, Language.PYTHON)
+    analyzer = ImportAnalyzer(tmp_path)
+    analysis = analyzer.analyze_project([tmp_path / "a.py", tmp_path / "b.py"])
+    snap = cs.create_snapshot(import_analysis=analysis, import_diagram=True)
+    assert "Import Relationships" in snap.content
+    assert "mermaid" in snap.content

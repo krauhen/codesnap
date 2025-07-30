@@ -5,6 +5,8 @@ import pytest
 
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+from codesnap import utils
 from codesnap.utils import copy_to_clipboard, detect_language, format_size
 
 
@@ -286,3 +288,12 @@ def test_copy_to_clipboard_linux_xsel_fallback(mock_popen, mock_system):
 
     # Should have tried xsel after xclip failed
     mock_popen.assert_called_with(["xsel", "--clipboard", "--input"], stdin=-1)
+
+
+def test_copy_to_clipboard_unknown(monkeypatch):
+    monkeypatch.setattr("platform.system", lambda: "OrangeOS")
+    assert not utils.copy_to_clipboard("x")
+
+
+def test_format_size_tb_boundary():
+    assert utils.format_size(1099511627776) == "1.0 TB"

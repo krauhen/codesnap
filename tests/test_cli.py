@@ -1,12 +1,13 @@
 """Tests for CLI functionality."""
 
+import sys
 import tempfile
 import pytest
 
 from pathlib import Path
 from unittest.mock import patch
 from click.testing import CliRunner
-from codesnap.cli import main
+from codesnap.cli import main, nullcontext
 
 
 @pytest.fixture
@@ -258,3 +259,81 @@ def test_cli_verbose_mode(runner, temp_python_project):
     assert result.exit_code == 0
     # Should include additional info
     assert "Auto-detected language" in result.output
+
+
+def test_nullcontext_context_manager():
+    nc = nullcontext()
+    with nc as val:
+        assert val is None
+
+
+def test_main_clipboard_output(tmp_path, monkeypatch):
+    # Change to use temp directory to avoid file system pollution
+    project_root = tmp_path / "proj"
+    project_root.mkdir()
+    (project_root / "main.py").write_text("print('foo')")
+    # Patch copy_to_clipboard to True
+    monkeypatch.setattr("codesnap.cli.copy_to_clipboard", lambda x: True)
+    from click.testing import CliRunner
+
+    result = CliRunner().invoke(main, [str(project_root), "-l", "python", "-c"])
+    assert result.exit_code == 0
+
+
+def test_main_output_file(tmp_path):
+    from click.testing import CliRunner
+
+    pr = tmp_path / "p"
+    pr.mkdir()
+    (pr / "main.py").write_text("print(1)")
+    output_path = tmp_path / "snap.txt"
+    result = CliRunner().invoke(main, [str(pr), "-l", "python", "-o", str(output_path)])
+    assert output_path.exists()
+    text = output_path.read_text()
+    assert "print(1)" in text
+
+
+def test_main_error(monkeypatch, tmp_path):
+    # Trigger an error inside main
+    pr = tmp_path / "pie"
+    pr.mkdir()
+    (pr / "main.py").write_text("print(2)")
+    from click.testing import CliRunner
+
+    # Patch detect_language to return None to force error
+    monkeypatch.setattr("codesnap.cli.detect_language", lambda path: None)
+    result = CliRunner().invoke(main, [str(pr)])
+    assert result.exit_code == 1
+    assert "Could not auto-detect language" in result.output
+
+
+def test_main_save_profile(tmp_path, monkeypatch):
+    pr = tmp_path / "pr"
+    pr.mkdir()
+    (pr / "main.py").write_text("print(1)")
+    configf = pr / "codesnap.json"
+    configf.write_text("{}")
+    from click.testing import CliRunner
+
+    result = CliRunner().invoke(
+        main, [str(pr), "--save-profile", "foo", "-f", str(configf), "-l", "python"]
+    )
+    assert "Saved profile: foo" in result.output
+
+
+def test_cli_import_errors(monkeypatch):
+    # Simulate ImportError for summarize
+    monkeypatch.setitem(sys.modules, "codesnap.summarize", None)
+    from codesnap.cli import main
+
+    # Use '--summarize'
+    result = CliRunner().invoke(main, ["--summarize", ".", "-l", "python"])
+    assert "Summarization requires httpx package" in result.output
+
+
+def test_cli_analyzer_import_errors(monkeypatch):
+    monkeypatch.setitem(sys.modules, "codesnap.analyzer", None)
+    from codesnap.cli import main
+
+    result = CliRunner().invoke(main, ["--analyze-imports", ".", "-l", "python"])
+    assert "Import analysis requires the analyzer module" in result.output

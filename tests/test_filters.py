@@ -345,3 +345,27 @@ def test_filter_with_exclude_patterns():
         # Check filtering
         assert filter_obj.should_ignore(root / "exclude.py") is True
         assert filter_obj.should_ignore(root / "include.py") is False
+
+
+def test_should_ignore_with_search_terms_dir(tmp_path):
+    d = tmp_path / "foo"
+    d.mkdir()
+    config = Config(search_terms=["foo"])
+    ff = FileFilter(tmp_path, Language.PYTHON, config)
+    assert ff.should_ignore(d) is False
+
+
+def test_get_ignore_patterns_reads_gitignore(tmp_path):
+    (tmp_path / ".gitignore").write_text("foo.txt\nbar/")
+    config = Config()
+    ff = FileFilter(tmp_path, Language.PYTHON, config)
+    p = ff._get_ignore_patterns()
+    assert any("foo.txt" in pat for pat in p)
+
+
+def test_gitignore_negated_pattern(tmp_path):
+    (tmp_path / ".gitignore").write_text("!main.py\n")
+    config = Config()
+    ff = FileFilter(tmp_path, Language.PYTHON, config)
+    # Should just skip the negated pattern with no crash
+    ff._get_ignore_patterns()

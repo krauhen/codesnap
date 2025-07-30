@@ -1,8 +1,8 @@
 """File filtering logic for codesnap."""
 
 import fnmatch
+
 from pathlib import Path
-from typing import Optional
 from codesnap.config import Config, Language, DEFAULT_IGNORE_PATTERNS, DEFAULT_INCLUDE_EXTENSIONS
 
 
@@ -17,6 +17,7 @@ class FileFilter:
         self.ignore_patterns = self._get_ignore_patterns()
         self.include_extensions = self._get_include_extensions()
         self.search_terms = config.search_terms or []
+        self.exclude_patterns = config.exclude_patterns or []
 
     def should_include_by_search_terms(self, path: Path) -> bool:
         """
@@ -34,11 +35,26 @@ class FileFilter:
 
     def should_ignore(self, path: Path) -> bool:
         """Check if a path should be ignored."""
+
+        if path.is_dir() and not any(path.iterdir()):
+            return False
+
         relative_path = path.relative_to(self.root_path)
         path_str = str(relative_path)
 
         # Always check standard ignore patterns first
         for pattern in self.ignore_patterns:
+            if pattern.endswith("/"):
+                # Directory pattern
+                if path.is_dir() and fnmatch.fnmatch(path.name + "/", pattern):
+                    return True
+            else:
+                # File pattern
+                if fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(path.name, pattern):
+                    return True
+
+        # Check exclude patterns (explicit excludes)
+        for pattern in self.exclude_patterns:
             if pattern.endswith("/"):
                 # Directory pattern
                 if path.is_dir() and fnmatch.fnmatch(path.name + "/", pattern):
@@ -76,14 +92,20 @@ class FileFilter:
         patterns = set(DEFAULT_IGNORE_PATTERNS.get(self.language, []))
 
         # Add custom ignore patterns from config
-        patterns.update(self.config.ignore_patterns)
+        # Ensure patterns are expanded to include full path matching
+        expanded_patterns = set()
+        for pattern in patterns.union(self.config.ignore_patterns):
+            # Add variations to catch different matching scenarios
+            expanded_patterns.add(pattern)
+            expanded_patterns.add(f"*/{pattern}")
+            expanded_patterns.add(f"**/{pattern}")
 
         # Read .gitignore if exists
         gitignore_path = self.root_path / ".gitignore"
         if gitignore_path.exists():
-            patterns.update(self._parse_gitignore(gitignore_path))
+            expanded_patterns.update(self._parse_gitignore(gitignore_path))
 
-        return patterns
+        return expanded_patterns
 
     def _get_include_extensions(self) -> set[str]:
         """Get file extensions to include."""
@@ -99,5 +121,8 @@ class FileFilter:
                 line = line.strip()
                 # Skip empty lines and comments
                 if line and not line.startswith("#"):
+                    # Handle negated patterns (not fully supported yet)
+                    if line.startswith("!"):
+                        continue  # Skip negated patterns for now
                     patterns.append(line)
         return patterns

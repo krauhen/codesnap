@@ -1,462 +1,201 @@
-= Codesnap
-:toc: left
-:toc-title: Table of Contents
-:toclevels: 3
+= codesnap
+
+_Generate LLM-friendly code snapshots_  
+A modern CLI tool to create clean, structured codebase snapshots for large language models (LLMs), summarization, and context windows.
+
+:toc:
+:sectnums:
 :icons: font
-:source-highlighter: rouge
-:experimental:
 
-image:https://img.shields.io/badge/python-3.13+-blue.svg[Python 3.13+, link=https://www.python.org/downloads/]
-image:https://img.shields.io/badge/License-MIT-yellow.svg[License: MIT, link=https://opensource.org/licenses/MIT]
+== Features
 
-Generate LLM-friendly code snapshots with smart filtering and clipboard support.
+- 📦 Output in Markdown, plain text, or JSON formats
+- 📂 Project directory tree, filtered to relevant files
+- 📝 Includes all core source/config files, auto-sorted
+- 🧐 Optionally analyzes import dependencies and generates Mermaid diagrams
+- 🤖 Summarize each file with LLMs (OpenAI or Anthropic)
+- ✂️ Copy snapshot to clipboard, save to file, or print to terminal
+- 🔍 Powerful file inclusion and filtering (by glob, extension, search terms, etc.)
+- 🛡️ Token-aware, safe for LLM context limits (OpenAI, Claude, etc.)
+- 🧑🏻‍💻 Profile and config management, CLI + programmatic use
 
-== Overview
+== Quickstart
 
-Codesnap is a command-line tool designed to create clean, structured snapshots of your codebase optimized for use with Large Language Models (LLMs). It intelligently filters out noise like build artifacts and dependencies while preserving the important context needed for AI-assisted development.
-
-=== Key Features
-
-* 🎯 *Smart Language Detection* - Automatically detects JavaScript, TypeScript, and Python projects
-* 🧹 *Intelligent Filtering* - Excludes build artifacts, caches, and dependencies by default
-* 📋 *Clipboard Integration* - Copy snapshots directly to clipboard on macOS, Linux, and Windows
-* 🔢 *Token Awareness* - Limit output size to fit within LLM context windows
-* ⚙️ *Highly Configurable* - Customize ignore patterns, file extensions, and more
-* 📁 *Project Structure* - Includes directory tree visualization for better context
-
-== Installation
-
-=== Using uv (Recommended)
-
-[source,bash]
-----
-uv pip install codesnap
-----
-
-=== Using pip
-
-[source,bash]
 ----
 pip install codesnap
 ----
 
-=== From Source
-
-[source,bash]
+.Example: snapshot the current directory and copy to clipboard
 ----
-git clone https://github.com/henningkrause/codesnap.git
-cd codesnap
-uv pip install -e .
+codesnap . -c
 ----
 
-== Quick Start
-
-[source,bash]
+.Example: output snapshot from a Python project and include import analysis diagram
 ----
-# Snapshot current directory to clipboard
-codesnap -c
-
-# Snapshot a specific project to clipboard
-codesnap ~/projects/my-app -c
-
-# Save snapshot to file
-codesnap -o snapshot.md
-
-# Limit tokens for GPT-4
-codesnap -c --max-tokens 8000
+codesnap path/to/project -l python --analyze-imports --import-diagram
 ----
 
-== Command Line Usage
-
-=== Basic Syntax
-
-[source,bash]
+.Example: include summaries of each file using OpenAI or Anthropic
 ----
-codesnap [OPTIONS] [PATH]
+codesnap . --summarize --llm-provider openai --summary-sentences 2
 ----
 
-=== Arguments
+== Usage
 
-[cols="1,3"]
+.Basic usage
+----
+codesnap [PATH] [OPTIONS]
+----
+
+Most options are auto-detected. Run with `--help` for all options:
+
+----
+codesnap --help
+----
+
+.Key options
+
+[options="header"]
 |===
-|Argument |Description
+| Option | Description
 
-|`PATH`
-|Project root path (default: current directory)
-|===
+| `-l`, `--language` `[python|javascript|typescript]`
+| Language (auto-detected if omitted)
 
-=== Options
+| `-o`, `--output <file>`
+| Output file (otherwise prints to terminal)
 
-[cols="2,1,4"]
-|===
-|Option |Short |Description
+| `-c`, `--clipboard`
+| Copy snapshot to clipboard
 
-|`--language`
-|`-l`
-|Project language: `javascript`, `typescript`, or `python` (auto-detected if not specified)
+| `--max-tokens <num>`
+| Limit output for LLM model context
 
-|`--clipboard`
-|`-c`
-|Copy output to clipboard instead of stdout
+| `--count-tokens`/`--no-count-tokens`
+| Enable or disable token counting (for speed tradeoff)
 
-|`--output`
-|`-o`
-|Output file path (stdout if not specified)
+| `--no-tree`
+| Omit directory tree in output
 
-|`--config-file`
-|`-f`
-|Path to configuration file
+| `--tree-depth <int>`
+| Limit directory tree recursion
 
-|`--max-tokens`
-|
-|Maximum tokens to include in output
+| `--tree-style` `[ascii|unicode]`
+| Directory tree drawing style
 
-|`--no-tree`
-|
-|Skip directory tree visualization
+| `--ignore <glob>`
+| Add ignore pattern
 
-|`--ignore`
-|
-|Additional ignore patterns (can be used multiple times)
+| `--include <glob>`
+| Explicitly include files by pattern
 
-|`--include-ext`
-|
-|Additional file extensions to include (can be used multiple times)
+| `--exclude <glob>`
+| Explicitly exclude files by pattern
 
-|`--version`
-|
-|Show version information
+| `--include-ext <.ext>`
+| Additional file extensions to include
 
-|`--help`
-|
-|Show help message
-|===
+| `--search-term <kw>`
+| Files containing these keywords (filename)
 
-== Usage Examples
+| `--format` `[markdown, text, json]`
+| Output format
 
-=== Basic Usage
+| `--max-file-lines`, `--max-line-length`
+| Limit file output size
 
-.Auto-detect language and copy to clipboard
-[source,bash]
-----
-codesnap -c
-----
+| `--profile <name>`
+| Load settings from config profile
 
-.Snapshot a specific directory
-[source,bash]
-----
-codesnap ~/projects/my-typescript-app -c
-----
+| `--save-profile <name>`
+| Save options to config profile
 
-.Specify language explicitly
-[source,bash]
-----
-codesnap -l python -c
-----
+| `--summarize`
+| Summarize all files with LLM
 
-=== Output Options
+| `--llm-provider` `[auto, openai, anthropic]`
+| LLM to use for summarization
 
-.Save to file
-[source,bash]
-----
-codesnap -o project-snapshot.md
-----
+| `--summary-sentences <n>`
+| Number of sentences per file summary (with `--summarize`)
 
-.Copy to clipboard with success message
-[source,bash]
-----
-$ codesnap -c
-✓ Code snapshot copied to clipboard
-  Characters: 15,234
-  Files included: 23
-  Approximate tokens: 4,521
-----
+| `--analyze-imports`
+| Analyze internal/external imports
 
-=== Token Limiting
+| `--import-diagram`
+| Generate a Mermaid import diagram
 
-.Limit output for GPT-4 (8K context)
-[source,bash]
-----
-codesnap -c --max-tokens 8000
-----
-
-.Limit output for Claude (100K context)
-[source,bash]
-----
-codesnap -c --max-tokens 100000
-----
-
-=== Custom Filtering
-
-.Ignore test files
-[source,bash]
-----
-codesnap -c --ignore "*.test.js" --ignore "__tests__/"
-----
-
-.Include additional file types
-[source,bash]
-----
-codesnap -c --include-ext ".env.example" --include-ext ".dockerfile"
-----
-
-.Multiple filters
-[source,bash]
-----
-codesnap -c \
-  --ignore "*.test.ts" \
-  --ignore "*.spec.ts" \
-  --ignore "docs/" \
-  --include-ext ".sql" \
-  --include-ext ".graphql"
-----
-
-=== Configuration File
-
-.Use a configuration file
-[source,bash]
-----
-codesnap -c -f .codesnap.json
-----
-
-.Skip directory tree
-[source,bash]
-----
-codesnap -c --no-tree
-----
-
-== Configuration
-
-You can create a `.codesnap.json` file in your project root to persist configuration:
-
-[source,json]
-----
-{
-  "ignore": [
-    "*.test.js",
-    "*.spec.js",
-    "docs/",
-    "examples/"
-  ],
-  "include_extensions": [
-    ".config.js",
-    ".env.example"
-  ],
-  "whitelist": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "package.json",
-    "tsconfig.json"
-  ],
-  "max_file_lines": 500
-}
-----
-
-=== Configuration Options
-
-[cols="2,3"]
-|===
-|Option |Description
-
-|`ignore`
-|Array of glob patterns for files/directories to ignore
-
-|`include_extensions`
-|Array of additional file extensions to include
-
-|`whitelist`
-|Array of glob patterns for files to explicitly include (overrides ignore)
-
-|`max_file_lines`
-|Maximum lines per file before truncation
 |===
 
-== Default Ignore Patterns
+== Import/Dependency Analysis
 
-=== JavaScript/TypeScript Projects
+Add deep project context for LLMs! Use `--analyze-imports` to include:
 
-* `node_modules/`
-* `dist/`, `build/`, `out/`
-* `coverage/`
-* `.next/`
-* `*.log`, `*.lock`
-* `.env*`
-* `.cache/`, `tmp/`, `temp/`
-* `*.min.js`, `*.map`
-* `.DS_Store`
-* `.vscode/`, `.idea/`
-* `*.tsbuildinfo` (TypeScript only)
+- Internal/external dependencies
+- Orphaned files, circular dependencies
+- Mermaid diagrams (`--import-diagram`)
 
-=== Python Projects
+== LLM Summarization
 
-* `__pycache__/`, `*.pyc`, `*.pyo`, `*.pyd`
-* `venv/`, `env/`, `.venv/`
-* `dist/`, `build/`
-* `*.egg-info/`
-* `.pytest_cache/`, `.coverage`, `htmlcov/`
-* `.tox/`, `.mypy_cache/`, `.ruff_cache/`
-* `*.log`
-* `.DS_Store`
-* `.vscode/`, `.idea/`
-* `*.db`, `*.sqlite`
-* `.uv/`
+Summarize files with OpenAI or Anthropic (Claude):
 
-== Output Format
+- Set your `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` as environment variables
+- Use `--summarize --llm-provider <provider>`
 
-The generated snapshot includes:
-
-. *Header* - Project name, language, and root path
-. *Directory Structure* - Tree visualization of included files
-. *File Contents* - Each file's content with syntax highlighting hints
-
-.Example Output
-[source,markdown]
+.Example (with OpenAI, 2 sentences per file)
 ----
-# Project: my-app
-Language: typescript
-Root: /Users/john/projects/my-app
-
-## Directory Structure
-my-app/
-├── src/
-│   ├── components/
-│   │   ├── Button.tsx
-│   │   └── Card.tsx
-│   ├── utils/
-│   │   └── helpers.ts
-│   └── index.ts
-├── package.json
-└── tsconfig.json
-
-
-## File Contents
-
-### package.json
-```json
-{
-  "name": "my-app",
-  "version": "1.0.0",
-  ...
-}
-
-### src/index.ts
-import { Button } from './components/Button';
-
-export function main() {
-  console.log('Hello, world!');
-}
-
-Total files: 6
-Approximate tokens: 1,234
+OPENAI_API_KEY=sk-... codesnap . --summarize --summary-sentences 2
 ----
-== Advanced Usage
 
-=== Language Detection
+== Configuration & Profiles
 
-Codesnap automatically detects project language based on:
+- Place config in `codesnap.json` at project root or `~/.config/codesnap/config.json`
+- Supports multiple named "profiles" for fast switching
 
-.JavaScript/TypeScript
+.Save CLI options to a profile:
+----
+codesnap . --max-file-lines 30 --save-profile short
+----
 
-     Presence of package.json
-     .ts or .tsx files indicate TypeScript
-     .js or .jsx files indicate JavaScript
+.Load from a profile:
+----
+codesnap . --profile short
+----
 
+== Programmatic API
 
-.Python
+Use `codesnap` as a library:
 
-     Presence of requirements.txt, pyproject.toml, setup.py, or Pipfile
-     .py files
+[source,python]
+----
+from codesnap import CodeSnapshotter, Config, Language
+snap = CodeSnapshotter(
+    root_path="myproject", 
+    language=Language.PYTHON, 
+    config=Config(max_file_lines=50)
+)
+result = snap.create_snapshot(max_tokens=4096)
+print(result.content)
+----
 
+== Requirements
 
-=== Integration with AI Tools
-.Copy to clipboard for ChatGPT
-[source,bash]
-codesnap -c --max-tokens 8000
-# Then paste directly into ChatGPT
-.Generate context file for GitHub Copilot Chat
-[source,bash]
-codesnap -o .github/copilot-context.md
-.Create snapshot for code review
-[source,bash]
-codesnap -o code-review-$(date +%Y%m%d).md
+- Python 3.8+
+- Optional: `httpx` if using LLM summarization (`pip install httpx`)
 
-== Tips and Best Practices
+== Development
 
-=== Optimize Context Window Usage
-
-     Use --max-tokens to stay within LLM limits
-     Use whitelist patterns to focus on specific parts of your codebase
-     Exclude test files unless specifically debugging tests
-     Remove generated files and build artifacts
-
-
-=== Project-Specific Configuration
-
-Create a .codesnap.json for each project type:
-.Frontend Project
-[source,json]
-{
-  "whitelist": ["src/**/", "package.json", "tsconfig.json"],
-  "ignore": [".test.", ".spec.", ".stories.*"]
-}
-.Backend API
-[source,json]
-{
-  "whitelist": ["app//*", "api//", "config/**/"],
-  "ignore": ["tests/", "migrations/", "seeds/"]
-}
-
-=== Shell Aliases
-
-Add to your .bashrc or .zshrc:
-[source,bash]
-Quick snapshot to clipboard
-
-alias snap='codesnap -c'
-Snapshot with token limit
-
-alias snapgpt='codesnap -c --max-tokens 8000'
-Snapshot without tree
-alias snapnt='codesnap -c --no-tree'
-
-== Troubleshooting
-
-=== Clipboard Not Working
-
-.macOS
-Ensure pbcopy is available (included by default)
-.Linux
-Install xclip or xsel:
-[source,bash]
-Ubuntu/Debian
-
-sudo apt-get install xclip
-Fedora
-sudo dnf install xclip
-
-.Windows
-Clipboard should work out of the box on Windows 10+
-
-=== Large Projects
-
-For very large projects:
-
-     Use whitelist patterns to focus on specific directories
-     Set --max-tokens to avoid truncation
-     Use --no-tree to save space
-     Consider splitting into multiple snapshots
-
+- Main code lives in the `codesnap/` directory
+- For CLI dev, use `python -m codesnap.main`
+- Contributions welcome!
 
 == License
 
-MIT License - see LICENSE file for details.
+MIT License.
 
-== Contributing
+== Author
 
-Contributions are welcome! Please see our https://github.com/henningkrause/codesnap/blob/main/CONTRIBUTING.md[Contributing  Guide].
+Henning Krause  
+<henning.krause90@googlemail.com>
 
-== Support
-
-     🐛 https://github.com/henningkrause/codesnap/issues[Report  bugs]
-     💡 https://github.com/henningkrause/codesnap/discussions[Request  features]
-     📖 https://github.com/henningkrause/codesnap/wiki[Read  the wiki]
+---

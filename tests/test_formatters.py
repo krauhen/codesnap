@@ -536,3 +536,37 @@ def test_format_file_with_line_limit_and_empty_file(temp_project):
     assert "```" in result
     # Should not contain truncation message
     assert "truncated" not in result
+
+
+def test_format_tree_json_format(tmp_path):
+    formatter = SnapshotFormatter(tmp_path, Language.PYTHON)
+    formatter.set_output_format(OutputFormat.JSON)
+    tree = {"name": "foo", "type": "directory", "children": []}
+    assert formatter.format_tree(tree) == ""
+
+
+def test_format_file_binary_file(tmp_path):
+    f = tmp_path / "b.bin"
+    f.write_bytes(b"\x89PNG\x01\x00")
+    formatter = SnapshotFormatter(tmp_path, Language.PYTHON)
+    out = formatter.format_file(f)
+    assert "Binary file" in out
+
+
+def test_format_file_handles_exception_open(monkeypatch, tmp_path):
+    f = tmp_path / "err.py"
+    f.write_text("1")
+    formatter = SnapshotFormatter(tmp_path, Language.PYTHON)
+    monkeypatch.setattr("builtins.open", lambda *a, **kw: (_ for _ in ()).throw(Exception("x")))
+    out = formatter.format_file(f)
+    assert "Error reading file:" in out
+
+
+def test_format_file_permission_error(monkeypatch, tmp_path):
+    f = tmp_path / "no_access.py"
+    f.write_text("print('x')")
+    formatter = SnapshotFormatter(tmp_path, Language.PYTHON)
+    monkeypatch.setattr(
+        "builtins.open", lambda *a, **kw: (_ for _ in ()).throw(PermissionError("perm"))
+    )
+    assert "Error reading file: perm" in formatter.format_file(f)
