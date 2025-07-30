@@ -1,11 +1,10 @@
 """Tests for utility functions."""
 
 import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
 import pytest
 
+from pathlib import Path
+from unittest.mock import patch, MagicMock
 from codesnap.utils import copy_to_clipboard, detect_language, format_size
 
 
@@ -189,3 +188,101 @@ def test_detect_language_nested_files():
         (root / "src" / "components" / "Button.tsx").write_text("export const Button = () => {}")
 
         assert detect_language(root) == "typescript"
+
+
+def test_detect_language_with_mixed_signals():
+    """Test language detection with mixed signals."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+
+        # Add both JavaScript and Python files
+        (root / "index.js").write_text("console.log('hello');")
+        (root / "script.py").write_text("print('hello')")
+
+        # Add package.json (JavaScript signal)
+        (root / "package.json").write_text('{"name": "test"}')
+
+        # Add requirements.txt (Python signal)
+        (root / "requirements.txt").write_text("pytest>=7.0.0\n")
+
+        # Check which language is detected (should be deterministic)
+        detected = detect_language(root)
+
+        # We're not asserting which one it should be, just that it's consistent
+        assert detected in ["javascript", "python"]
+
+
+def test_copy_to_clipboard_with_unicode():
+    """Test clipboard copy with Unicode characters."""
+    with patch("platform.system", return_value="Darwin"):
+        with patch("subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
+            mock_process.returncode = 0
+            mock_popen.return_value = mock_process
+
+            # Try with Unicode text
+            unicode_text = "Hello, 世界! 😊"
+            result = copy_to_clipboard(unicode_text)
+
+            assert result is True
+            # Check that the text was encoded correctly
+            args, kwargs = mock_process.communicate.call_args
+            assert args[0] == unicode_text.encode("utf-8")
+
+
+def test_copy_to_clipboard_with_very_large_text():
+    """Test clipboard copy with very large text."""
+    with patch("platform.system", return_value="Darwin"):
+        with patch("subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
+            mock_process.returncode = 0
+            mock_popen.return_value = mock_process
+
+            # Try with a large text (1MB)
+            large_text = "x" * (1024 * 1024)
+            result = copy_to_clipboard(large_text)
+
+            assert result is True
+            # Check that the text was passed to communicate
+            mock_process.communicate.assert_called_once()
+
+
+def test_format_size_with_negative_values():
+    """Test format_size with negative values."""
+    # Current implementation doesn't validate for negative values
+    # This test documents the current behavior
+    result = format_size(-100)
+    # Should return something, but we're not specifying what
+    assert isinstance(result, str)
+
+
+def test_detect_language_with_empty_directory():
+    """Test language detection with an empty directory."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+
+        # Empty directory should return None
+        assert detect_language(root) is None
+
+
+@patch("platform.system")
+@patch("subprocess.Popen")
+def test_copy_to_clipboard_linux_xsel_fallback(mock_popen, mock_system):
+    """Test clipboard copy on Linux with xsel fallback."""
+    mock_system.return_value = "Linux"
+
+    # Mock xclip not found, xsel succeeds
+    def side_effect_func(cmd, **kwargs):
+        if cmd[0] == "xclip":
+            raise FileNotFoundError("xclip not found")
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        return mock_proc
+
+    mock_popen.side_effect = side_effect_func
+
+    result = copy_to_clipboard("test text")
+    assert result is True
+
+    # Should have tried xsel after xclip failed
+    mock_popen.assert_called_with(["xsel", "--clipboard", "--input"], stdin=-1)
