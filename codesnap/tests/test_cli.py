@@ -61,7 +61,7 @@ def test_cli_clipboard(mock_clipboard, runner, temp_python_project):
 
 def test_cli_output_file(runner, temp_python_project):
     """Test CLI with file output."""
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
         output_path = f.name
 
     result = runner.invoke(main, [str(temp_python_project), "-o", output_path])

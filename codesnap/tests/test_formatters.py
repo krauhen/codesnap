@@ -34,11 +34,13 @@ def test_format_tree():
         "name": "project",
         "type": "directory",
         "children": [
-            {"name": "src", "type": "directory", "children": [
-                {"name": "main.py", "type": "file", "children": None}
-            ]},
-            {"name": "README.md", "type": "file", "children": None}
-        ]
+            {
+                "name": "src",
+                "type": "directory",
+                "children": [{"name": "main.py", "type": "file", "children": None}],
+            },
+            {"name": "README.md", "type": "file", "children": None},
+        ],
     }
 
     result = formatter.format_tree(tree)

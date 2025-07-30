@@ -27,15 +27,15 @@ console = Console()
 )
 @click.option("-f", "--config-file", type=click.Path(exists=True), help="Config file path")
 @click.option("-o", "--output", type=click.Path(), help="Output file (stdout if not specified)")
+@click.option("-c", "--clipboard", is_flag=True, help="Copy output to clipboard instead of stdout")
+@click.option("--max-tokens", type=int, help="Maximum tokens to include")
 @click.option(
-    "-c", "--clipboard", is_flag=True, help="Copy output to clipboard instead of stdout"
     "--model-encoding",
     type=click.Choice(["cl100k_base", "o200k_base"], case_sensitive=False),
     help="Encoding that the models use to create tokens.",
     default="o200k_base",
     show_default=True,
 )
-@click.option("--max-tokens", type=int, help="Maximum tokens to include")
 @click.option("--no-tree", is_flag=True, help="Skip directory tree")
 @click.option("--ignore", multiple=True, help="Additional ignore patterns")
 @click.option("--include-ext", multiple=True, help="Additional file extensions to include")
@@ -84,9 +84,7 @@ def main(
 
         # Generate snapshot
         with console.status("[bold blue]Generating code snapshot..."):
-            snapshot = snapshotter.create_snapshot(
-                max_tokens=max_tokens, show_tree=not no_tree
-            )
+            snapshot = snapshotter.create_snapshot(max_tokens=max_tokens, show_tree=not no_tree)
 
         # Output handling
         if clipboard:
@@ -107,9 +105,7 @@ def main(
         elif output:
             output_path = Path(output)
             output_path.write_text(snapshot.content, encoding="utf-8")
-            console.print(
-                f"[green]✓[/green] Code snapshot written to [bold]{output}[/bold]"
-            )
+            console.print(f"[green]✓[/green] Code snapshot written to [bold]{output}[/bold]")
         else:
             console.print(snapshot.content)
 

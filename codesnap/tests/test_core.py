@@ -95,10 +95,7 @@ def test_file_sorting(temp_project):
 
 def test_custom_config(temp_project):
     """Test snapshot with custom configuration."""
-    config = Config(
-        ignore_patterns=["tests/"],
-        include_extensions=[".py", ".md"]
-    )
+    config = Config(ignore_patterns=["tests/"], include_extensions=[".py", ".md"])
     snapshotter = CodeSnapshotter(temp_project, Language.PYTHON, config)
     snapshot = snapshotter.create_snapshot()
 

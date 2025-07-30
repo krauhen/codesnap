@@ -48,11 +48,7 @@ class SnapshotFormatter:
 
     def format_footer(self, file_count: int, token_count: int) -> str:
         """Format the snapshot footer."""
-        return (
-            f"\n---\n"
-            f"Total files: {file_count}\n"
-            f"Approximate tokens: {token_count:,}"
-        )
+        return f"\n---\nTotal files: {file_count}\nApproximate tokens: {token_count:,}"
 
     def _format_tree_node(self, node: dict, prefix: str = "", is_last: bool = True) -> list[str]:
         """Recursively format tree nodes."""
@@ -70,9 +66,7 @@ class SnapshotFormatter:
             for i, child in enumerate(children):
                 extension = "    " if is_last else "│   "
                 is_last_child = i == len(children) - 1
-                lines.extend(
-                    self._format_tree_node(child, prefix + extension, is_last_child)
-                )
+                lines.extend(self._format_tree_node(child, prefix + extension, is_last_child))
 
         return lines
 

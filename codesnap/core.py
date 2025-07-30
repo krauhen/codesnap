@@ -40,9 +40,7 @@ class CodeSnapshotter:
         self.formatter = SnapshotFormatter(self.root_path, self.language)
         self.tokenizer = tiktoken.get_encoding(mode_encoding)
 
-    def create_snapshot(
-        self, max_tokens: Optional[int] = None, show_tree: bool = True
-    ) -> Snapshot:
+    def create_snapshot(self, max_tokens: Optional[int] = None, show_tree: bool = True) -> Snapshot:
         """Create a code snapshot."""
         # Collect files
         files = self._collect_files()
