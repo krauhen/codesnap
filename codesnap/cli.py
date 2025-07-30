@@ -39,6 +39,9 @@ console = Console()
 @click.option("--no-tree", is_flag=True, help="Skip directory tree")
 @click.option("--ignore", multiple=True, help="Additional ignore patterns")
 @click.option("--include-ext", multiple=True, help="Additional file extensions to include")
+@click.option(
+    "-s", "--search-term", multiple=True, help="Include files containing these search terms"
+)
 def main(
     path: Path,
     language: Optional[str],
@@ -50,6 +53,7 @@ def main(
     no_tree: bool,
     ignore: tuple[str, ...],
     include_ext: tuple[str, ...],
+    search_term: tuple[str, ...],
 ) -> None:
     """
     Generate LLM-friendly code snapshots.
@@ -71,6 +75,10 @@ def main(
 
         # Load configuration
         config = Config.from_file(config_file) if config_file else Config()
+
+        # Add search terms to config
+        if search_term:
+            config.search_terms = list(search_term)
 
         # Apply CLI overrides
         if ignore:

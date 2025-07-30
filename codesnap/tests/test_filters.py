@@ -98,3 +98,39 @@ def test_directory_patterns(temp_project):
 
     # Should ignore node_modules directory
     assert filter.should_ignore(temp_project / "node_modules")
+
+
+def test_search_term_filtering(temp_project):
+    """Test filtering files by search terms."""
+    # Create some test files
+    (temp_project / "tika_embedder.py").write_text("class TikaEmbedder: pass")
+    (temp_project / "config_tika.json").write_text("{}")
+    (temp_project / "other_file.txt").write_text("nothing")
+
+    # Test single search term
+    config = Config(search_terms=["tika"])
+    filter = FileFilter(temp_project, Language.PYTHON, config)
+
+    # Files with 'tika' in path should not be ignored
+    assert not filter.should_ignore(temp_project / "tika_embedder.py")
+    assert not filter.should_ignore(temp_project / "config_tika.json")
+
+    # Files without 'tika' should be ignored
+    assert filter.should_ignore(temp_project / "other_file.txt")
+
+
+def test_multiple_search_terms(temp_project):
+    """Test filtering with multiple search terms."""
+    (temp_project / "tika_embedder.py").write_text("class TikaEmbedder: pass")
+    (temp_project / "config_obj.json").write_text("{}")
+    (temp_project / "other_file.txt").write_text("nothing")
+
+    config = Config(search_terms=["tika", "config"])
+    filter = FileFilter(temp_project, Language.PYTHON, config)
+
+    # Files with 'tika' or 'config' in path should not be ignored
+    assert not filter.should_ignore(temp_project / "tika_embedder.py")
+    assert not filter.should_ignore(temp_project / "config_obj.json")
+
+    # Files without these terms should be ignored
+    assert filter.should_ignore(temp_project / "other_file.txt")

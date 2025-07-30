@@ -130,6 +130,10 @@ class CodeSnapshotter:
                 if not self.filter.should_ignore(file_path):
                     files.append(file_path)
 
+        # If search terms are used, further filter files
+        if self.filter.search_terms:
+            files = [f for f in files if self.filter.should_include_by_search_terms(f)]
+
         return files
 
     def _sort_files(self, files: list[Path]) -> list[Path]:

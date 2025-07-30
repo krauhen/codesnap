@@ -23,6 +23,7 @@ class Config:
     include_extensions: list[str] = field(default_factory=list)
     whitelist_patterns: list[str] = field(default_factory=list)
     max_file_lines: Optional[int] = None
+    search_terms: list[str] = field(default_factory=list)
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Config":
