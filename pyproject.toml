@@ -3,7 +3,7 @@ name = "codesnap"
 version = "1.10.0"
 description = "Generate LLM-friendly code snapshots with smart filtering and clipboard support"
 # readme = "README.adoc"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
 authors = [
     { name = "Henning Krause", email = "henning.krause90@googlemail.com" }
