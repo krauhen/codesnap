@@ -7,7 +7,6 @@ import pytest
 import tiktoken
 import threading
 
-from unittest.mock import patch
 from pathlib import Path
 from codesnap.config import Config, Language
 from codesnap.core import CodeSnapshotter, Snapshot

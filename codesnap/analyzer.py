@@ -1,10 +1,9 @@
 """Code analysis functionality for import and dependency tracking."""
 
-import re
 import os
-
+import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional, Any
+from typing import Any
 
 
 class ImportAnalyzer:
@@ -13,11 +12,11 @@ class ImportAnalyzer:
     def __init__(self, root_path: Path):
         """Initialize the import analyzer."""
         self.root_path = root_path
-        self.imports_by_file: Dict[str, List[str]] = {}
-        self.imported_by: Dict[str, List[str]] = {}
-        self.external_imports: Dict[str, Set[str]] = {}
+        self.imports_by_file: dict[str, list[str]] = {}
+        self.imported_by: dict[str, list[str]] = {}
+        self.external_imports: dict[str, set[str]] = {}
 
-    def analyze_file(self, file_path: Path) -> Tuple[List[str], Set[str]]:
+    def analyze_file(self, file_path: Path) -> tuple[list[str], set[str]]:
         """
         Analyze imports in a single file.
         Returns (internal_imports, external_imports)
@@ -28,16 +27,15 @@ class ImportAnalyzer:
 
             if file_ext in [".py", ".pyi"]:
                 return self._analyze_python_imports(file_path, content)
-            elif file_ext in [".js", ".jsx", ".ts", ".tsx"]:
+            if file_ext in [".js", ".jsx", ".ts", ".tsx"]:
                 return self._analyze_js_imports(file_path, content)
-            else:
-                # Unsupported file type
-                return [], set()
+            # Unsupported file type
+            return [], set()
         except Exception:
             # Skip files that can't be read
             return [], set()
 
-    def _analyze_python_imports(self, file_path: Path, content: str) -> Tuple[List[str], Set[str]]:
+    def _analyze_python_imports(self, file_path: Path, content: str) -> tuple[list[str], set[str]]:
         """Analyze Python imports."""
         internal_imports = []
         external_imports = set()
@@ -63,7 +61,7 @@ class ImportAnalyzer:
 
         return internal_imports, external_imports
 
-    def _analyze_js_imports(self, file_path: Path, content: str) -> Tuple[List[str], Set[str]]:
+    def _analyze_js_imports(self, file_path: Path, content: str) -> tuple[list[str], set[str]]:
         """Analyze JavaScript/TypeScript imports."""
         internal_imports = []
         external_imports = set()
@@ -105,7 +103,7 @@ class ImportAnalyzer:
             or (potential_path / "__init__.py").exists()
         )
 
-    def _module_to_file_path(self, module_path: str, file_path: Path) -> Optional[Path]:
+    def _module_to_file_path(self, module_path: str, file_path: Path) -> Path | None:
         """Convert a Python module path to a file path."""
         if module_path.startswith("."):
             # Relative import
@@ -133,21 +131,18 @@ class ImportAnalyzer:
             # Check possible file paths
             if (target.parent / f"{target.name}.py").exists():
                 return target.parent / f"{target.name}.py"
-            elif (target / "__init__.py").exists():
+            if (target / "__init__.py").exists():
                 return target / "__init__.py"
-            else:
-                return None
-        else:
-            # Absolute import
-            target = self.root_path / module_path.replace(".", "/")
-            if target.exists() and target.is_dir() and (target / "__init__.py").exists():
-                return target / "__init__.py"
-            elif (target.parent / f"{target.name}.py").exists():
-                return target.parent / f"{target.name}.py"
-            else:
-                return None
+            return None
+        # Absolute import
+        target = self.root_path / module_path.replace(".", "/")
+        if target.exists() and target.is_dir() and (target / "__init__.py").exists():
+            return target / "__init__.py"
+        if (target.parent / f"{target.name}.py").exists():
+            return target.parent / f"{target.name}.py"
+        return None
 
-    def _js_import_to_file_path(self, import_path: str, file_path: Path) -> Optional[Path]:
+    def _js_import_to_file_path(self, import_path: str, file_path: Path) -> Path | None:
         """Convert a JS/TS import path to a file path."""
         if import_path.startswith("."):
             # Relative import
@@ -173,11 +168,10 @@ class ImportAnalyzer:
                     return target / f"index{ext}"
 
             return None
-        else:
-            # Non-relative import, probably external
-            return None
+        # Non-relative import, probably external
+        return None
 
-    def analyze_project(self, files: List[Path]) -> Dict[str, Any]:
+    def analyze_project(self, files: list[Path]) -> dict[str, Any]:
         """
         Analyze import relationships for the entire project.
         Returns a dictionary with import information.
@@ -223,12 +217,12 @@ class ImportAnalyzer:
             "orphaned_files": self._find_orphaned_files(files),
         }
 
-    def _detect_circular_dependencies(self) -> List[List[str]]:
+    def _detect_circular_dependencies(self) -> list[list[str]]:
         """Detect circular dependencies in the imports."""
         circular_deps = []
         visited = set()
 
-        def dfs(file_path: str, path: List[str]):
+        def dfs(file_path: str, path: list[str]):
             if file_path in path:
                 # Found a cycle
                 cycle_start = path.index(file_path)
@@ -250,7 +244,7 @@ class ImportAnalyzer:
 
         return circular_deps
 
-    def _find_orphaned_files(self, all_files: List[Path]) -> List[str]:
+    def _find_orphaned_files(self, all_files: list[Path]) -> list[str]:
         """Find files that are not imported by any other file."""
         all_file_paths = {str(f.relative_to(self.root_path)) for f in all_files if f.is_file()}
         imported_files = set()
@@ -338,34 +332,48 @@ class ImportAnalyzer:
         if not self.imports_by_file:
             return "No imports found."
 
-        lines = ["FILE DEPENDENCIES:"]
-        for file, imports in sorted(self.imports_by_file.items()):
-            if imports:
-                internal = [imp for imp in imports]
-                external = sorted(self.external_imports.get(file, set()))
-
-                imports_str = ", ".join(internal)
-                if external:
-                    if internal:
-                        imports_str += ", "
-                    imports_str += ", ".join(f"external:{ext}" for ext in external)
-
-                lines.append(f"{file} -> {imports_str}")
-
+        lines: list[str] = ["FILE DEPENDENCIES:"]
+        lines.extend(self._format_file_dependencies())
         lines.append("\nIMPORTED BY:")
-        for file, importers in sorted(self.imported_by.items()):
-            if importers:
-                lines.append(f"{file} <- {', '.join(importers)}")
-
+        lines.extend(self._format_imported_by())
         lines.append("\nCORE FILES (most imported):")
-        for i, (file, count) in enumerate(
-            sorted(self.imported_by.items(), key=lambda x: len(x[1]), reverse=True)[:10], 1
-        ):
-            lines.append(f"{i}. {file} (imported by {len(self.imported_by[file])} files)")
+        lines.extend(self._format_core_files())
 
-        if self._detect_circular_dependencies():
+        cycles = self._detect_circular_dependencies()
+        if cycles:
             lines.append("\nCIRCULAR DEPENDENCIES:")
-            for i, cycle in enumerate(self._detect_circular_dependencies(), 1):
-                lines.append(f"{i}. {' -> '.join(cycle)}")
+            lines.extend(self._format_circular_deps(cycles))
 
         return "\n".join(lines)
+
+    # ---- new helper methods ----
+    def _format_file_dependencies(self) -> list[str]:
+        result = []
+        for file, imports in sorted(self.imports_by_file.items()):
+            if imports or self.external_imports.get(file):
+                internal = list(imports)
+                external = sorted(self.external_imports.get(file, set()))
+                imports_str = ", ".join(internal)
+                if external:
+                    if imports_str:
+                        imports_str += ", "
+                    imports_str += ", ".join(f"external:{ext}" for ext in external)
+                result.append(f"{file} -> {imports_str}")
+        return result
+
+    def _format_imported_by(self) -> list[str]:
+        result = []
+        for file, importers in sorted(self.imported_by.items()):
+            if importers:
+                result.append(f"{file} <- {', '.join(importers)}")
+        return result
+
+    def _format_core_files(self) -> list[str]:
+        core_list = sorted(self.imported_by.items(), key=lambda x: len(x[1]), reverse=True)[:10]
+        return [
+            f"{i + 1}. {file} (imported by {len(importers)} files)"
+            for i, (file, importers) in enumerate(core_list)
+        ]
+
+    def _format_circular_deps(self, cycles: list[list[str]]) -> list[str]:
+        return [f"{i + 1}. {' -> '.join(cycle)}" for i, cycle in enumerate(cycles)]

@@ -1,20 +1,19 @@
 """LLM-based code summarization functionality."""
 
-import os
 import asyncio
-import httpx
-
-from typing import Dict, List, Optional
+import os
 from pathlib import Path
+
+import httpx
 
 
 class LLMProvider:
     """Base class for LLM providers."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key or self._get_api_key()
 
-    def _get_api_key(self) -> Optional[str]:
+    def _get_api_key(self) -> str | None:
         """Get API key from environment variables."""
         return None
 
@@ -26,7 +25,7 @@ class LLMProvider:
 class OpenAIProvider(LLMProvider):
     """OpenAI API provider for code summarization."""
 
-    def _get_api_key(self) -> Optional[str]:
+    def _get_api_key(self) -> str | None:
         return os.environ.get("OPENAI_API_KEY")
 
     async def summarize_code(self, code: str, file_path: str, num_sentences: int = 3) -> str:
@@ -74,7 +73,7 @@ class OpenAIProvider(LLMProvider):
 class AnthropicProvider(LLMProvider):
     """Anthropic API provider for code summarization."""
 
-    def _get_api_key(self) -> Optional[str]:
+    def _get_api_key(self) -> str | None:
         return os.environ.get("ANTHROPIC_API_KEY")
 
     async def summarize_code(self, code: str, file_path: str, num_sentences: int = 3) -> str:
@@ -120,7 +119,7 @@ class AnthropicProvider(LLMProvider):
 class CodeSummarizer:
     """Manages code summarization using different LLM providers."""
 
-    def __init__(self, provider_name: Optional[str] = None):
+    def __init__(self, provider_name: str | None = None):
         """Initialize the code summarizer with the specified provider."""
         self.provider_name = provider_name or os.environ.get("CODESNAP_LLM_PROVIDER", "auto")
         self.provider = self._get_provider()
@@ -131,16 +130,14 @@ class CodeSummarizer:
             # Try to determine provider based on available API keys
             if os.environ.get("ANTHROPIC_API_KEY"):
                 return AnthropicProvider()
-            elif os.environ.get("OPENAI_API_KEY"):
+            if os.environ.get("OPENAI_API_KEY"):
                 return OpenAIProvider()
-            else:
-                raise ValueError("No API keys found for any supported LLM provider.")
-        elif self.provider_name == "anthropic":
+            raise ValueError("No API keys found for any supported LLM provider.")
+        if self.provider_name == "anthropic":
             return AnthropicProvider()
-        elif self.provider_name == "openai":
+        if self.provider_name == "openai":
             return OpenAIProvider()
-        else:
-            raise ValueError(f"Unsupported LLM provider: {self.provider_name}")
+        raise ValueError(f"Unsupported LLM provider: {self.provider_name}")
 
     async def summarize_file(self, file_path: Path, num_sentences: int = 3) -> str:
         """Summarize a single file."""
@@ -152,11 +149,13 @@ class CodeSummarizer:
         except Exception as e:
             return f"Error summarizing file: {str(e)}"
 
-    async def summarize_files(self, files: List[Path], num_sentences: int = 3) -> Dict[str, str]:
+    async def summarize_files(self, files: list[Path], num_sentences: int = 3) -> dict[str, str]:
         """Summarize multiple files concurrently."""
         tasks = []
         for file_path in files:
             tasks.append(self.summarize_file(file_path, num_sentences))
 
         summaries = await asyncio.gather(*tasks)
-        return {str(file_path): summary for file_path, summary in zip(files, summaries)}
+        return {
+            str(file_path): summary for file_path, summary in zip(files, summaries, strict=False)
+        }

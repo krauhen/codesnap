@@ -1,79 +1,78 @@
 """Utility functions for codesnap."""
 
 import platform
+import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
+
+
+def _copy_mac(text: str) -> bool:
+    """Copy text to clipboard on macOS using pbcopy."""
+    pbcopy = shutil.which("pbcopy")
+    if not pbcopy:
+        return False
+    result = subprocess.run([pbcopy], input=text.encode("utf-8"), check=False)  # noqa: S603
+    return result.returncode == 0
+
+
+def _copy_linux(text: str) -> bool:
+    """Copy text to clipboard on Linux using xclip or xsel."""
+    for cmd in [["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]]:
+        binary = shutil.which(cmd[0])
+        if not binary:
+            continue
+        result = subprocess.run([binary] + cmd[1:], input=text.encode("utf-8"), check=False)  # noqa: S603
+        if result.returncode == 0:
+            return True
+    return False
+
+
+def _copy_windows(text: str) -> bool:
+    """Copy text to clipboard on Windows using clip."""
+    clip = shutil.which("clip")
+    if not clip:
+        return False
+    result = subprocess.run([clip], input=text.encode("utf-8"), check=False)  # noqa: S603
+    return result.returncode == 0
 
 
 def copy_to_clipboard(text: str) -> bool:
     """
     Copy text to system clipboard.
-
     Returns True if successful, False otherwise.
     """
     try:
         system = platform.system()
-
-        if system == "Darwin":  # macOS
-            process = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
-            process.communicate(text.encode("utf-8"))
-            return process.returncode == 0
-
-        elif system == "Linux":
-            # Try xclip first, then xsel
-            for cmd in [["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]]:
-                try:
-                    process = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-                    process.communicate(text.encode("utf-8"))
-                    if process.returncode == 0:
-                        return True
-                except FileNotFoundError:
-                    continue
-            return False
-
-        elif system == "Windows":
-            process = subprocess.Popen(["clip"], stdin=subprocess.PIPE, shell=True)
-            process.communicate(text.encode("utf-8"))
-            return process.returncode == 0
-
-        else:
-            return False
-
+        if system == "Darwin":
+            return _copy_mac(text)
+        if system == "Linux":
+            return _copy_linux(text)
+        if system == "Windows":
+            return _copy_windows(text)
+        return False
     except Exception:
         return False
 
 
-def detect_language(path: Path) -> Optional[str]:
-    """
-    Auto-detect the programming language of a project.
-
-    Returns the detected language or None if unable to detect.
-    """
-    # Check for language-specific files
+def detect_language(path: Path) -> str | None:
+    """Auto-detect the programming language of a project."""
     if (path / "package.json").exists():
-        # Check if TypeScript is used
         if any(path.glob("**/*.ts")) or any(path.glob("**/*.tsx")):
             return "typescript"
         return "javascript"
 
-    elif any(
+    if any(
         (path / file).exists()
         for file in ["requirements.txt", "pyproject.toml", "setup.py", "Pipfile"]
     ):
         return "python"
 
-    # Check by file extensions
-    extensions = set()
-    for file_path in path.rglob("*"):
-        if file_path.is_file():
-            extensions.add(file_path.suffix)
-
+    extensions = {f.suffix for f in path.rglob("*") if f.is_file()}
     if ".py" in extensions:
         return "python"
-    elif ".ts" in extensions or ".tsx" in extensions:
+    if ".ts" in extensions or ".tsx" in extensions:
         return "typescript"
-    elif ".js" in extensions or ".jsx" in extensions:
+    if ".js" in extensions or ".jsx" in extensions:
         return "javascript"
 
     return None

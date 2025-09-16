@@ -1,11 +1,10 @@
 """Configuration management for codesnap."""
 
 import json
-
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 
 class Language(Enum):
@@ -24,12 +23,12 @@ class Config:
     include_extensions: list[str] = field(default_factory=list)
     whitelist_patterns: list[str] = field(default_factory=list)
     exclude_patterns: list[str] = field(default_factory=list)
-    max_file_lines: Optional[int] = None
-    max_line_length: Optional[int] = None
+    max_file_lines: int | None = None
+    max_line_length: int | None = None
     search_terms: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_file(cls, path: Optional[str | Path]) -> "Config":
+    def from_file(cls, path: str | Path | None) -> "Config":
         """Load configuration from a JSON file."""
         if not path:
             # Try default locations
@@ -45,11 +44,8 @@ class Config:
                 # No config file found
                 return cls()
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
-
-        # Extract profile data if present
-        profiles = data.pop("profiles", {})
 
         return cls(
             ignore_patterns=data.get("ignore", []),
@@ -73,7 +69,7 @@ class Config:
             "search_terms": self.search_terms,
         }
 
-    def update(self, updates: Dict[str, Any]) -> None:
+    def update(self, updates: dict[str, Any]) -> None:
         """Update configuration with new values."""
         for key, value in updates.items():
             if hasattr(self, key) and value is not None:
@@ -83,11 +79,11 @@ class Config:
 class ProfileManager:
     """Manages configuration profiles."""
 
-    def __init__(self, config_path: Optional[str | Path] = None):
+    def __init__(self, config_path: str | Path | None = None):
         """Initialize the profile manager."""
         self.config_path = self._resolve_config_path(config_path)
 
-    def _resolve_config_path(self, config_path: Optional[str | Path]) -> Path:
+    def _resolve_config_path(self, config_path: str | Path | None) -> Path:
         """Resolve the configuration file path."""
         if config_path:
             return Path(config_path)
@@ -105,18 +101,18 @@ class ProfileManager:
         # If no existing config file, use the first default path
         return default_paths[0]
 
-    def _load_config_data(self) -> Dict[str, Any]:
+    def _load_config_data(self) -> dict[str, Any]:
         """Load the configuration data from file."""
         if not self.config_path.exists():
             return {}
 
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with open(self.config_path, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
             return {}
 
-    def _save_config_data(self, data: Dict[str, Any]) -> None:
+    def _save_config_data(self, data: dict[str, Any]) -> None:
         """Save configuration data to file."""
         # Ensure directory exists
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +120,7 @@ class ProfileManager:
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
-    def load_profile(self, profile_name: str) -> Optional[Dict[str, Any]]:
+    def load_profile(self, profile_name: str) -> dict[str, Any] | None:
         """Load a profile from the configuration file."""
         data = self._load_config_data()
         profiles = data.get("profiles", {})
@@ -144,7 +140,7 @@ class ProfileManager:
         # Save back to file
         self._save_config_data(data)
 
-    def list_profiles(self) -> List[str]:
+    def list_profiles(self) -> list[str]:
         """List available profiles."""
         data = self._load_config_data()
         profiles = data.get("profiles", {})

@@ -1,13 +1,14 @@
 """Tests for CLI functionality."""
 
+import json
 import sys
 import tempfile
 import pytest
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
-from codesnap.cli import main, nullcontext
+from codesnap.cli import main, NullContext
 
 
 @pytest.fixture
@@ -228,17 +229,14 @@ def test_cli_with_nonexistent_profile(runner, temp_python_project):
 
 def test_cli_with_tree_options(runner, temp_python_project):
     """Test CLI with tree display options."""
-    # Test with no tree
     result = runner.invoke(main, [str(temp_python_project), "--no-tree"])
     assert result.exit_code == 0
     assert "Directory Structure" not in result.output
 
-    # Test with tree depth
     result = runner.invoke(main, [str(temp_python_project), "--tree-depth", "1"])
     assert result.exit_code == 0
     assert "Directory Structure" in result.output
 
-    # Test with ASCII tree style
     result = runner.invoke(main, [str(temp_python_project), "--tree-style", "ascii"])
     assert result.exit_code == 0
     assert "|--" in result.output or "`--" in result.output
@@ -261,18 +259,16 @@ def test_cli_verbose_mode(runner, temp_python_project):
     assert "Auto-detected language" in result.output
 
 
-def test_nullcontext_context_manager():
-    nc = nullcontext()
+def test_NullContext_context_manager():
+    nc = NullContext()
     with nc as val:
         assert val is None
 
 
 def test_main_clipboard_output(tmp_path, monkeypatch):
-    # Change to use temp directory to avoid file system pollution
     project_root = tmp_path / "proj"
     project_root.mkdir()
     (project_root / "main.py").write_text("print('foo')")
-    # Patch copy_to_clipboard to True
     monkeypatch.setattr("codesnap.cli.copy_to_clipboard", lambda x: True)
     from click.testing import CliRunner
 
@@ -294,13 +290,11 @@ def test_main_output_file(tmp_path):
 
 
 def test_main_error(monkeypatch, tmp_path):
-    # Trigger an error inside main
     pr = tmp_path / "pie"
     pr.mkdir()
     (pr / "main.py").write_text("print(2)")
     from click.testing import CliRunner
 
-    # Patch detect_language to return None to force error
     monkeypatch.setattr("codesnap.cli.detect_language", lambda path: None)
     result = CliRunner().invoke(main, [str(pr)])
     assert result.exit_code == 1
@@ -326,7 +320,6 @@ def test_cli_import_errors(monkeypatch):
     monkeypatch.setitem(sys.modules, "codesnap.summarize", None)
     from codesnap.cli import main
 
-    # Use '--summarize'
     result = CliRunner().invoke(main, ["--summarize", ".", "-l", "python"])
     assert "Summarization requires httpx package" in result.output
 
@@ -337,3 +330,345 @@ def test_cli_analyzer_import_errors(monkeypatch):
 
     result = CliRunner().invoke(main, ["--analyze-imports", ".", "-l", "python"])
     assert "Import analysis requires the analyzer module" in result.output
+
+
+@pytest.fixture
+def temp_project():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "main.py").write_text("def hello(): print('world')")
+        (root / "test.py").write_text("def test(): pass")
+        (root / "README.md").write_text("# Test Project")
+        yield root
+
+
+def test_cli_format_text(runner, temp_project):
+    """Test text output format."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--output-format", "text"])
+    assert result.exit_code == 0
+    assert "Project:" in result.output  # Text format header
+    assert "# Project:" not in result.output  # Not markdown
+
+
+def test_cli_format_json(runner, temp_project):
+    """Test JSON output format."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--output-format", "json"])
+    assert result.exit_code == 0
+
+    try:
+        data = json.loads(result.output)
+        assert "project" in data
+        assert "language" in data
+        assert "files" in data
+    except json.JSONDecodeError:
+        pytest.fail("Output is not valid JSON")
+
+
+def test_cli_no_header(runner, temp_project):
+    """Test without header."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--no-header"])
+    assert result.exit_code == 0
+    assert "# Project:" not in result.output
+    assert "Language:" not in result.output
+
+
+def test_cli_no_footer(runner, temp_project):
+    """Test without footer."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--no-footer"])
+    assert result.exit_code == 0
+    assert "Total files:" not in result.output
+    assert "Approximate tokens:" not in result.output
+
+
+def test_cli_no_header_no_footer(runner, temp_project):
+    """Test without header and footer."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--no-header", "--no-footer"])
+    assert result.exit_code == 0
+    assert "# Project:" not in result.output
+    assert "Total files:" not in result.output
+
+
+def test_cli_ignore_patterns(runner, temp_project):
+    """Test ignore patterns."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--ignore", "*.py"])
+    assert result.exit_code == 0
+    assert "def hello():" not in result.output  # Python files should be ignored
+    assert "# Test Project" in result.output  # Markdown should remain
+
+
+def test_cli_multiple_ignore_patterns(runner, temp_project):
+    """Test multiple ignore patterns."""
+    result = runner.invoke(
+        main, [str(temp_project), "-l", "python", "--ignore", "*.py", "--ignore", "*.md"]
+    )
+    assert result.exit_code == 0
+    assert "def hello():" not in result.output
+    assert "# Test Project" not in result.output
+
+
+def test_cli_include_patterns(runner, temp_project):
+    """Test include patterns."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--include", "*.py"])
+    assert result.exit_code == 0
+    assert "def hello():" in result.output
+
+
+def test_cli_exclude_patterns(runner, temp_project):
+    """Test exclude patterns."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--exclude", "test.py"])
+    assert result.exit_code == 0
+    assert "def hello():" in result.output  # main.py should be included
+    assert "def test():" not in result.output  # test.py should be excluded
+
+
+def test_cli_include_extensions(runner, temp_project):
+    """Test include extensions."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--include-ext", ".py"])
+    assert result.exit_code == 0
+    assert "def hello():" in result.output
+
+
+def test_cli_max_file_lines(runner, temp_project):
+    """Test max file lines limit."""
+    long_file = temp_project / "long.py"
+    long_file.write_text("\n".join([f"line_{i} = {i}" for i in range(50)]))
+
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--max-file-lines", "5"])
+    assert result.exit_code == 0
+    assert "line_0 = 0" in result.output
+    assert "line_4 = 4" in result.output
+    assert "line_10 = 10" not in result.output
+
+
+def test_cli_max_line_length(runner, temp_project):
+    """Test max line length limit."""
+    long_line_file = temp_project / "long_line.py"
+    long_line_file.write_text("x = '" + "a" * 200 + "'")
+
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--max-line-length", "50"])
+    assert result.exit_code == 0
+    assert "more chars" in result.output  # Should show truncation
+
+
+def test_cli_token_buffer(runner, temp_project):
+    """Test token buffer option."""
+    result = runner.invoke(
+        main, [str(temp_project), "-l", "python", "--max-tokens", "100", "--token-buffer", "50"]
+    )
+    assert result.exit_code == 0
+
+
+def test_cli_no_count_tokens(runner, temp_project):
+    """Test disabling token counting."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--no-count-tokens"])
+    assert result.exit_code == 0
+
+
+def test_cli_model_encoding_cl100k(runner, temp_project):
+    """Test cl100k_base encoding."""
+    result = runner.invoke(
+        main, [str(temp_project), "-l", "python", "--model-encoding", "cl100k_base"]
+    )
+    assert result.exit_code == 0
+
+
+def test_cli_tree_depth_zero(runner, temp_project):
+    """Test tree depth of 0."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--tree-depth", "0"])
+    assert result.exit_code == 0
+    assert "Directory Structure" in result.output
+
+
+def test_cli_tree_style_ascii(runner, temp_project):
+    """Test ASCII tree style."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--tree-style", "ascii"])
+    assert result.exit_code == 0
+    assert "|--" in result.output or "`--" in result.output
+
+
+def test_cli_double_verbose(runner, temp_project):
+    """Test double verbose mode."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "-vv"])
+    assert result.exit_code == 0
+
+
+def test_cli_triple_verbose(runner, temp_project):
+    """Test triple verbose mode."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "-vvv"])
+    assert result.exit_code == 0
+
+
+@patch("codesnap.analyzer.ImportAnalyzer")
+def test_cli_analyze_imports(mock_import_analyzer, runner, temp_project):
+    mock_instance = MagicMock()
+    mock_instance.analyze_project.return_value = {
+        "imports_by_file": {},
+        "imported_by": {},
+        "external_imports": {},
+        "core_files": [],
+        "circular_dependencies": [],
+        "orphaned_files": [],
+    }
+    mock_instance.generate_adjacency_list.return_value = "FILE DEPENDENCIES:\nImport Relationships"
+    mock_import_analyzer.return_value = mock_instance
+
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--analyze-imports"])
+    assert result.exit_code == 0
+    assert "Import Relationships" in result.output
+
+
+@patch("codesnap.analyzer.ImportAnalyzer")
+def test_cli_import_diagram(mock_import_analyzer, runner, temp_project):
+    mock_instance = MagicMock()
+    mock_instance.analyze_project.return_value = {
+        "imports_by_file": {},
+        "imported_by": {},
+        "external_imports": {},
+        "core_files": [],
+        "circular_dependencies": [],
+        "orphaned_files": [],
+    }
+    mock_instance.generate_adjacency_list.return_value = "Import Relationships"
+    mock_instance.generate_mermaid_diagram.return_value = "```mermaid\ngraph TD;\n```"
+    mock_import_analyzer.return_value = mock_instance
+
+    result = runner.invoke(
+        main, [str(temp_project), "-l", "python", "--analyze-imports", "--import-diagram"]
+    )
+    assert result.exit_code == 0
+    assert "mermaid" in result.output
+
+
+@patch("codesnap.summarize.CodeSummarizer")
+def test_cli_summarize(mock_summarizer, runner, temp_project):
+    """Test summarization flag."""
+    mock_instance = MagicMock()
+    mock_instance.summarize_files.return_value = {
+        str(temp_project / "main.py"): "This is a summary of main.py"
+    }
+    mock_summarizer.return_value = mock_instance
+
+    with patch("asyncio.run") as mock_run:
+        mock_run.return_value = {str(temp_project / "main.py"): "Summary"}
+        result = runner.invoke(main, [str(temp_project), "-l", "python", "--summarize"])
+        assert result.exit_code == 0
+
+
+def test_cli_summarize_with_options(runner, temp_project):
+    """Test summarization with custom options."""
+    result = runner.invoke(
+        main,
+        [
+            str(temp_project),
+            "-l",
+            "python",
+            "--summarize",
+            "--llm-provider",
+            "openai",
+            "--summary-sentences",
+            "5",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_cli_nonexistent_config_file(runner, temp_project):
+    """Test with non-existent config file."""
+    result = runner.invoke(
+        main, [str(temp_project), "-l", "python", "--config-file", "/nonexistent/config.json"]
+    )
+    assert result.exit_code == 2  # Click error for non-existent file
+
+
+def test_cli_invalid_config_file(runner, temp_project):
+    """Test with invalid config file."""
+    invalid_config = temp_project / "invalid.json"
+    invalid_config.write_text("{invalid json")
+
+    result = runner.invoke(
+        main, [str(temp_project), "-l", "python", "--config-file", str(invalid_config)]
+    )
+    assert result.exit_code == 1  # Should handle JSON error
+
+
+def test_cli_invalid_language(runner, temp_project):
+    """Test with invalid language."""
+    result = runner.invoke(main, [str(temp_project), "-l", "invalid"])
+    assert result.exit_code == 2  # Click validation error
+
+
+def test_cli_invalid_format(runner, temp_project):
+    """Test with invalid format."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--output-format", "invalid"])
+    assert result.exit_code == 2  # Click validation error
+
+
+def test_cli_invalid_tree_style(runner, temp_project):
+    """Test with invalid tree style."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--tree-style", "invalid"])
+    assert result.exit_code == 2  # Click validation error
+
+
+def test_cli_invalid_model_encoding(runner, temp_project):
+    """Test with invalid model encoding."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--model-encoding", "invalid"])
+    assert result.exit_code == 2  # Click validation error
+
+
+def test_cli_complex_combination(runner, temp_project):
+    """Test complex combination of options."""
+    result = runner.invoke(
+        main,
+        [
+            str(temp_project),
+            "-l",
+            "python",
+            "--output-format",
+            "markdown",
+            "--max-tokens",
+            "1000",
+            "--tree-depth",
+            "2",
+            "--ignore",
+            "*.pyc",
+            "--include-ext",
+            ".py",
+            "--verbose",
+            "--no-footer",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_cli_zero_max_tokens(runner, temp_project):
+    """Test with zero max tokens."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--max-tokens", "0"])
+    assert result.exit_code == 0
+
+
+def test_cli_negative_values(runner, temp_project):
+    """Test with negative values."""
+    result = runner.invoke(main, [str(temp_project), "-l", "python", "--max-file-lines", "-1"])
+    assert result.exit_code in [0, 2]
+
+
+def test_cli_help(runner):
+    """Test help output."""
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "Generate LLM-friendly code snapshots" in result.output
+    assert "--language" in result.output
+    assert "--output-format" in result.output
+
+
+def test_cli_version(runner):
+    """Test version output."""
+    result = runner.invoke(main, ["--version"])
+    assert result.exit_code == 0
+
+
+def test_cli_empty_project(runner):
+    """Test with empty project."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        result = runner.invoke(main, [tmpdir, "-l", "python"])
+        assert result.exit_code == 0

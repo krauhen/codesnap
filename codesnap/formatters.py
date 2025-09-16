@@ -2,7 +2,7 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict
+
 from codesnap.config import Language
 
 
@@ -47,9 +47,7 @@ class SnapshotFormatter:
             f"Root: {self.root_path}\n"
         )
 
-    def format_tree(
-        self, tree: dict, max_depth: Optional[int] = None, style: str = "unicode"
-    ) -> str:
+    def format_tree(self, tree: dict, max_depth: int | None = None, style: str = "unicode") -> str:
         """Format directory tree structure."""
         if self.output_format == OutputFormat.JSON:
             # For JSON format, we'll return an empty string and handle it in the final output
@@ -94,9 +92,9 @@ class SnapshotFormatter:
         node: dict,
         prefix: str = "",
         is_last: bool = True,
-        chars: Dict[str, str] = None,
+        chars: dict[str, str] = None,
         current_depth: int = 0,
-        max_depth: Optional[int] = None,
+        max_depth: int | None = None,
     ) -> list[str]:
         """Recursively format tree nodes."""
         lines = []
@@ -136,9 +134,9 @@ class SnapshotFormatter:
     def format_file(
         self,
         file_path: Path,
-        max_lines: Optional[int] = None,
-        max_line_length: Optional[int] = None,
-        summary: Optional[str] = None,  # Make this parameter optional
+        max_lines: int | None = None,
+        max_line_length: int | None = None,
+        summary: str | None = None,  # Make this parameter optional
     ) -> str:
         """Format a single file's content."""
         relative_path = file_path.relative_to(self.root_path)
@@ -156,8 +154,7 @@ class SnapshotFormatter:
         if content == "Binary file (not shown)":
             if self.output_format == OutputFormat.TEXT:
                 return f"File: {relative_path}\n{content}\n"
-            else:
-                return f"### {relative_path}\n{content}\n"
+            return f"### {relative_path}\n{content}\n"
 
         # Add summary if provided
         summary_text = ""
@@ -188,13 +185,13 @@ class SnapshotFormatter:
     def _read_file_content(
         self,
         file_path: Path,
-        max_lines: Optional[int] = None,
-        max_line_length: Optional[int] = None,
+        max_lines: int | None = None,
+        max_line_length: int | None = None,
     ) -> str:
         """Read file content with optional line limit and length limit."""
         try:
             # Try to read as text first
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 if max_lines or max_line_length:
                     lines = []
                     for i, line in enumerate(f):
@@ -211,8 +208,7 @@ class SnapshotFormatter:
                             lines.append(line)
 
                     return "".join(lines)
-                else:
-                    return f.read()
+                return f.read()
         except UnicodeDecodeError:
             # If it's a binary file, return a placeholder
             return "Binary file (not shown)"
