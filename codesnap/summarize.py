@@ -52,7 +52,8 @@ class OpenAIProvider(LLMProvider):
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "You are a code analysis assistant that provides concise, technical summaries of code files.",
+                                "content": "You are a code analysis assistant that provides concise, "
+                                "technical summaries of code files.",
                             },
                             {"role": "user", "content": prompt},
                         ],

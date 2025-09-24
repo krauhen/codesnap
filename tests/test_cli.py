@@ -283,7 +283,7 @@ def test_main_output_file(tmp_path):
     pr.mkdir()
     (pr / "main.py").write_text("print(1)")
     output_path = tmp_path / "snap.txt"
-    result = CliRunner().invoke(main, [str(pr), "-l", "python", "-o", str(output_path)])
+    CliRunner().invoke(main, [str(pr), "-l", "python", "-o", str(output_path)])
     assert output_path.exists()
     text = output_path.read_text()
     assert "print(1)" in text

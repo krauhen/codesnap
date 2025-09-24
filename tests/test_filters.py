@@ -255,7 +255,7 @@ def test_gitignore_with_negated_patterns(temp_project):
     assert filter.should_ignore(temp_project / "test.log")
     # Ideally, important.log should not be ignored, but the current implementation might not support this
     # This assertion documents the current behavior
-    ignored = filter.should_ignore(temp_project / "important.log")
+    filter.should_ignore(temp_project / "important.log")
     # We're not asserting a specific value here, just documenting the behavior
 
 

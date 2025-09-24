@@ -3,7 +3,7 @@
 import asyncio
 import os
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, AsyncMock
 from pathlib import Path
 from codesnap.summarize import CodeSummarizer, OpenAIProvider, AnthropicProvider, LLMProvider
 

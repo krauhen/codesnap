@@ -1,9 +1,5 @@
-import tempfile
-import pytest
-
-from pathlib import Path
 from unittest.mock import patch, MagicMock
-from codesnap.utils import copy_to_clipboard, detect_language, format_size
+from codesnap.utils import copy_to_clipboard
 
 
 @patch("shutil.which")

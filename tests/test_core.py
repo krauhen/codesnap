@@ -315,9 +315,7 @@ def test_snapshot_with_invalid_encoding(temp_project):
     """Test snapshot with invalid encoding parameter."""
     # Try with a non-existent encoding
     with pytest.raises(ValueError):  # Changed from KeyError to ValueError
-        snapshotter = CodeSnapshotter(
-            temp_project, Language.PYTHON, model_encoding="non_existent_encoding"
-        )
+        CodeSnapshotter(temp_project, Language.PYTHON, model_encoding="non_existent_encoding")
 
 
 def test_snapshot_with_recursive_symlinks(temp_project):
