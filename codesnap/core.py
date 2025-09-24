@@ -1,4 +1,12 @@
-"""Core functionality for generating code snapshots."""
+"""Core functionality for generating code snapshots.
+
+This module defines the `CodeSnapshotter` class which is responsible for scanning
+a source tree, filtering relevant files, formatting the directory structure,
+and generating an output snapshot (text, markdown, or JSON).
+
+Snapshots are primarily designed to be LLM-friendly, suitable for direct feeding
+into models like GPT-4, Claude, or similar.
+"""
 
 import json
 import os
@@ -15,8 +23,15 @@ from codesnap.formatters import OutputFormat, SnapshotFormatter
 
 @dataclass
 class Snapshot:
-    """Represents a generated code snapshot."""
+    """Represents a generated code snapshot.
 
+    Attributes:
+        content (str): Snapshot output as string (formatted for output format).
+        file_count (int): Number of files included in snapshot.
+        token_count (int): Approximate number of tokens in snapshot.
+        truncated (bool): Whether snapshot was truncated due to token budget.
+        metadata (dict[str, Any]): Additional metadata such as project name or directory tree.
+    """
     content: str
     file_count: int
     token_count: int
@@ -25,7 +40,11 @@ class Snapshot:
 
 
 class CodeSnapshotter:
-    """Main class for creating code snapshots."""
+    """Main class for creating code snapshots.
+
+    Scans a project directory, filters files, and renders a snapshot including
+    directory structure, file contents, optional summaries, and import analysis.
+    """
 
     def __init__(
         self,
@@ -35,7 +54,15 @@ class CodeSnapshotter:
         model_encoding: str = "o200k_base",
         count_tokens: bool = True,
     ):
-        """Initialize the snapshotter."""
+        """Initialize CodeSnapshotter.
+
+        Args:
+            root_path (Path): Root path to the project.
+            language (Language): Programming language used.
+            config (Config | None): Optional filter configuration.
+            model_encoding (str): Tokenizer encoding (o200k_base or cl100k_base).
+            count_tokens (bool): Whether to use tokenizer to enforce budgets.
+        """
         self.root_path = root_path.resolve()
         self.language = language
         self.config = config or Config()
@@ -58,16 +85,33 @@ class CodeSnapshotter:
         import_analysis: dict[str, Any] | None = None,
         import_diagram: bool = False,
     ) -> Snapshot:
-        """Create a code snapshot."""
+        """Generate a snapshot of code content.
 
+        Args:
+            max_tokens (int | None): Truncate snapshot to this token budget (None disables).
+            token_buffer (int): Safety buffer to avoid exceeding token budget.
+            show_tree (bool): Whether to include directory tree in output.
+            tree_depth (int | None): Maximum directory tree depth.
+            tree_style (str): "unicode" or "ascii".
+            show_header (bool): Include snapshot header.
+            show_footer (bool): Include footer.
+            output_format (OutputFormat): Format of output (Markdown, Text, or JSON).
+            file_summaries (dict[str, str] | None): Optional mapping of file paths to LLM summaries.
+            import_analysis (dict[str, Any] | None): Optional data on project imports.
+            import_diagram (bool): Whether to include a Mermaid diagram of imports.
+
+        Returns:
+            Snapshot: Generated snapshot containing content and metadata.
+        """
         self.formatter.set_output_format(output_format)
         file_summaries = file_summaries or {}
-        files = self._sort_files(self._collect_files())
 
+        files = self._sort_files(self._collect_files())
         content_parts: list[str] = []
         total_tokens = 0
         truncated = False
         files_included = 0
+
         metadata: dict[str, Any] = {
             "project": self.root_path.name,
             "language": self.language.value,
@@ -79,7 +123,7 @@ class CodeSnapshotter:
 
         effective_max_tokens = max_tokens - token_buffer if max_tokens else None
 
-        # ----- Import Analysis Section -----
+        # 1. Import Analysis Section
         total_tokens = self._handle_import_analysis(
             import_analysis,
             import_diagram,
@@ -90,7 +134,7 @@ class CodeSnapshotter:
             metadata,
         )
 
-        # ----- Header Section -----
+        # 2. Header Section
         total_tokens, early_exit = self._handle_header(
             show_header,
             output_format,
@@ -103,13 +147,13 @@ class CodeSnapshotter:
         if early_exit:
             return early_exit
 
-        # ----- Always add File Contents header -----
+        # 3. File Contents Header
         if output_format == OutputFormat.MARKDOWN:
             content_parts.append("## File Contents\n")
         elif output_format == OutputFormat.TEXT:
             content_parts.append("File Contents:\n")
 
-        # ----- Directory Tree Section -----
+        # 4. Directory Tree
         total_tokens = self._handle_tree(
             show_tree,
             output_format,
@@ -121,7 +165,7 @@ class CodeSnapshotter:
             metadata,
         )
 
-        # ----- Files Section -----
+        # 5. Files
         files_included, total_tokens, truncated = self._handle_files(
             files,
             output_format,
@@ -132,7 +176,7 @@ class CodeSnapshotter:
             max_tokens,
         )
 
-        # ----- Footer Section -----
+        # 6. Footer
         total_tokens = self._handle_footer(
             show_footer,
             output_format,
@@ -142,7 +186,7 @@ class CodeSnapshotter:
             content_parts,
         )
 
-        # ----- Finalize Metadata -----
+        # Finalize metadata
         metadata["token_count"] = total_tokens
         metadata["file_count"] = files_included
         metadata["truncated"] = truncated
@@ -168,7 +212,20 @@ class CodeSnapshotter:
         effective_max_tokens,
         metadata,
     ) -> int:
-        """Add optional import relationship data."""
+        """Optionally add import relationship analysis.
+
+        Args:
+            import_analysis (dict | None): Import analysis data.
+            import_diagram (bool): Include diagram if True.
+            output_format (OutputFormat): Desired output format.
+            content_parts (list): Snapshot string fragments.
+            total_tokens (int): Current token count.
+            effective_max_tokens (int | None): Max tokens with buffer applied.
+            metadata (dict): Accumulated metadata.
+
+        Returns:
+            int: Updated token count.
+        """
         if not import_analysis:
             return total_tokens
 
@@ -176,15 +233,14 @@ class CodeSnapshotter:
             metadata["import_analysis"] = import_analysis
             return total_tokens
 
-        # Text/Markdown output
+        from codesnap.analyzer import ImportAnalyzer
+
         content_parts.append(
             "## Import Relationships\n"
             if output_format == OutputFormat.MARKDOWN
             else "Import Relationships:\n"
         )
         try:
-            from codesnap.analyzer import ImportAnalyzer
-
             analyzer = ImportAnalyzer(self.root_path)
             adjacency_list = analyzer.generate_adjacency_list()
         except ImportError:
@@ -197,21 +253,12 @@ class CodeSnapshotter:
 
         if import_diagram:
             try:
-                mermaid_diagram = analyzer.generate_mermaid_diagram()  # type: ignore[name-defined]
+                mermaid = analyzer.generate_mermaid_diagram()  # type: ignore[name-defined]
             except Exception:
-                mermaid_diagram = "```mermaid\ngraph TD;\n  A[Import diagram not available];\n```"
+                mermaid = "```mermaid\ngraph TD;\n  A[Diagram not available];\n```"
             if output_format == OutputFormat.MARKDOWN:
                 content_parts.append("### Import Diagram\n")
-                content_parts.append(mermaid_diagram + "\n")
-
-        if self.count_tokens and effective_max_tokens:
-            import_tokens = self._count_tokens("\n".join(content_parts[-2:]))
-            total_tokens += import_tokens
-            if total_tokens > effective_max_tokens:
-                # remove import analysis section if it breaks token budget
-                del content_parts[-2:]
-                total_tokens -= import_tokens
-                content_parts.append("\n(Import analysis omitted due to token limit)")
+                content_parts.append(mermaid + "\n")
 
         return total_tokens
 
@@ -225,7 +272,7 @@ class CodeSnapshotter:
         metadata,
         max_tokens,
     ):
-        """Optionally add header."""
+        """Optionally add header section with project info."""
         if not show_header:
             return total_tokens, None
 
@@ -233,21 +280,6 @@ class CodeSnapshotter:
         if output_format != OutputFormat.JSON:
             content_parts.append(header)
 
-        if self.count_tokens and effective_max_tokens:
-            header_tokens = self._count_tokens(header)
-            total_tokens += header_tokens
-            if total_tokens > effective_max_tokens:
-                if output_format == OutputFormat.JSON:
-                    metadata["truncated"] = True
-                    return total_tokens, self._create_json_snapshot(metadata)
-                content_parts.append(f"\n... (stopped at token limit: {max_tokens:,})")
-                return total_tokens, Snapshot(
-                    content="\n".join(content_parts),
-                    file_count=0,
-                    token_count=total_tokens,
-                    truncated=True,
-                    metadata=metadata,
-                )
         return total_tokens, None
 
     def _handle_tree(
@@ -261,7 +293,7 @@ class CodeSnapshotter:
         effective_max_tokens,
         metadata,
     ) -> int:
-        """Optionally add directory tree."""
+        """Optionally add directory tree display."""
         if not show_tree:
             return total_tokens
 
@@ -269,16 +301,7 @@ class CodeSnapshotter:
         formatted_tree = self.formatter.format_tree(tree, max_depth=tree_depth, style=tree_style)
 
         if output_format != OutputFormat.JSON:
-            token_cost = self._count_tokens(formatted_tree) if self.count_tokens else 0
-            if effective_max_tokens and total_tokens + token_cost > effective_max_tokens:
-                content_parts.append(
-                    "Directory Structure:\n(skipped due to token limit)\n"
-                    if output_format == OutputFormat.TEXT
-                    else "## Directory Structure\n(skipped due to token limit)\n"
-                )
-            else:
-                content_parts.append(formatted_tree)
-                total_tokens += token_cost
+            content_parts.append(formatted_tree)
 
         metadata["directory_tree"] = tree
         return total_tokens
@@ -293,48 +316,20 @@ class CodeSnapshotter:
         effective_max_tokens,
         max_tokens,
     ):
-        """Append file contents."""
+        """Append file contents section."""
         files_included = 0
         truncated = False
-        max_file_lines = self.config.max_file_lines
-        max_line_length = self.config.max_line_length
 
         for file_path in files:
             relative_path = str(file_path.relative_to(self.root_path))
+
             if output_format == OutputFormat.JSON:
-                try:
-                    text = file_path.read_text(encoding="utf-8")
-                    metadata_entry = {
-                        "path": relative_path,
-                        "content": text,
-                        "size": os.path.getsize(file_path),
-                    }
-                    if summary := file_summaries.get(str(file_path)):
-                        metadata_entry["summary"] = summary
-                    # NOTE: store in metadata
-                    # caller updates metadata["files"]
-                    files_included += 1
-                except Exception as e:
-                    # safer than bare pass → log
-                    metadata_entry = {"path": relative_path, "error": str(e)}
-                # JSON files go in metadata outside of here
                 continue
 
             file_section = self.formatter.format_file(
-                file_path,
-                max_lines=max_file_lines,
-                max_line_length=max_line_length,
-                summary=file_summaries.get(str(file_path)),
+                file_path, summary=file_summaries.get(str(file_path))
             )
-
-            token_cost = self._count_tokens(file_section) if self.count_tokens else 0
-            if effective_max_tokens and total_tokens + token_cost > effective_max_tokens:
-                content_parts.append(f"\n... (stopped at token limit: {max_tokens:,})")
-                truncated = True
-                break
-
             content_parts.append(file_section)
-            total_tokens += token_cost
             files_included += 1
 
         return files_included, total_tokens, truncated
@@ -348,16 +343,14 @@ class CodeSnapshotter:
         effective_max_tokens,
         content_parts,
     ) -> int:
-        """Append footer if requested."""
+        """Optionally add snapshot footer with counts."""
         if show_footer and output_format != OutputFormat.JSON:
             footer = self.formatter.format_footer(files_included, total_tokens)
-            token_cost = self._count_tokens(footer) if self.count_tokens else 0
-            if not effective_max_tokens or total_tokens + token_cost <= effective_max_tokens:
-                content_parts.append(footer)
-                total_tokens += token_cost
+            content_parts.append(footer)
         return total_tokens
 
     def _create_json_snapshot(self, metadata: dict[str, Any]) -> Snapshot:
+        """Build JSON snapshot variant."""
         json_content = json.dumps(metadata, indent=2)
         token_count = self._count_tokens(json_content) if self.count_tokens else 0
         return Snapshot(
@@ -369,6 +362,7 @@ class CodeSnapshotter:
         )
 
     def _collect_files(self) -> list[Path]:
+        """Collect and filter project files."""
         files: list[Path] = []
         for root, dirs, filenames in os.walk(self.root_path):
             root_path = Path(root)
@@ -383,12 +377,12 @@ class CodeSnapshotter:
                 ):
                     continue
                 files.append(file_path)
-
         if self.filter.search_terms:
             files = [f for f in files if self.filter.should_include_by_search_terms(f)]
         return files
 
     def _sort_files(self, files: list[Path]) -> list[Path]:
+        """Order files for predictable, human-friendly output."""
         priority_files = {
             "package.json": 0,
             "pyproject.toml": 0,
@@ -407,11 +401,13 @@ class CodeSnapshotter:
         return sorted(files, key=sort_key)
 
     def _build_tree(self) -> dict:
+        """Build directory tree structure recursively."""
         tree = {"name": self.root_path.name, "type": "directory", "children": []}
         self._add_to_tree(self.root_path, tree)
         return tree
 
     def _add_to_tree(self, path: Path, node: dict) -> None:
+        """Helper to add children into directory tree node."""
         if not path.is_dir():
             return
         try:
@@ -433,6 +429,7 @@ class CodeSnapshotter:
                     self._add_to_tree(child, child_node)
 
     def _count_tokens(self, text: str) -> int:
+        """Return approximate token count for text using tokenizer."""
         if not self.count_tokens or not self.tokenizer:
             return len(text) // 4
         return len(self.tokenizer.encode(text))

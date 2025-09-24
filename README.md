@@ -9,5 +9,5 @@ $ uv sync
 # dev
 ## test
 ```bash
-$ uv run coverage run -m pytestx
+$ uv run coverage run -m pytest
 ```

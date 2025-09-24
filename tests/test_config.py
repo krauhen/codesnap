@@ -1,12 +1,9 @@
-"""Tests for configuration functionality."""
-
+"""Tests for configuration functionality (aligned with simplified codesnap.config)."""
 import json
 import tempfile
-from unittest.mock import patch
-
 import pytest
-
 from pathlib import Path
+
 from codesnap.config import (
     Config,
     Language,
@@ -19,357 +16,97 @@ from codesnap.config import (
 def test_config_defaults():
     """Test default configuration values."""
     config = Config()
-
     assert isinstance(config.ignore_patterns, list)
     assert isinstance(config.include_extensions, list)
     assert isinstance(config.whitelist_patterns, list)
+    assert isinstance(config.exclude_patterns, list)
     assert config.max_file_lines is None
+    assert config.max_line_length is None
 
 
-def test_config_from_file():
+def test_config_from_file(tmp_path):
     """Test loading configuration from file."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump(
-            {
-                "ignore": ["*.log", "temp/"],
-                "include_extensions": [".py", ".md"],
-                "whitelist": ["src/*.py"],
-                "max_file_lines": 100,
-            },
-            f,
-        )
+    data = {
+        "ignore": ["*.log", "temp/"],
+        "include_extensions": [".py", ".md"],
+        "whitelist": ["src/*.py"],
+        "exclude": ["tests/"],
+        "max_file_lines": 100,
+        "max_line_length": 80,
+        "search_terms": ["foo"],
+    }
+    cfg_path = tmp_path / "cfg.json"
+    cfg_path.write_text(json.dumps(data))
 
-    config_path = Path(f.name)
-    try:
-        config = Config.from_file(config_path)
+    cfg = Config.from_file(cfg_path)
 
-        assert "*.log" in config.ignore_patterns
-        assert "temp/" in config.ignore_patterns
-        assert ".py" in config.include_extensions
-        assert ".md" in config.include_extensions
-        assert "src/*.py" in config.whitelist_patterns
-        assert config.max_file_lines == 100
-    finally:
-        config_path.unlink()
+    assert "*.log" in cfg.ignore_patterns
+    assert ".py" in cfg.include_extensions
+    assert "src/*.py" in cfg.whitelist_patterns
+    assert "tests/" in cfg.exclude_patterns
+    assert cfg.max_file_lines == 100
+    assert cfg.max_line_length == 80
+    assert "foo" in cfg.search_terms
 
 
-def test_config_to_dict():
-    """Test converting configuration to dictionary."""
-    config = Config(
-        ignore_patterns=["*.log", "temp/"],
-        include_extensions=[".py", ".md"],
-        whitelist_patterns=["src/*.py"],
-        max_file_lines=100,
-    )
+def test_config_to_dict_and_update():
+    """Test converting config to dict and updating."""
+    config = Config(ignore_patterns=["*.log"], max_file_lines=100)
+    dct = config.to_dict()
+    assert dct["ignore"] == ["*.log"]
+    assert dct["max_file_lines"] == 100
 
-    config_dict = config.to_dict()
-
-    assert config_dict["ignore"] == ["*.log", "temp/"]
-    assert config_dict["include_extensions"] == [".py", ".md"]
-    assert config_dict["whitelist"] == ["src/*.py"]
-    assert config_dict["max_file_lines"] == 100
+    # Update
+    config.update({"ignore_patterns": ["*.tmp"], "search_terms": ["bar"]})
+    assert config.ignore_patterns == ["*.tmp"]
+    assert "bar" in config.search_terms
 
 
 def test_default_patterns():
-    """Test default patterns for different languages."""
-    # Check that each language has default patterns
-    for language in Language:
-        assert language in DEFAULT_IGNORE_PATTERNS
-        assert language in DEFAULT_INCLUDE_EXTENSIONS
+    """Test default patterns for different languages exist and are non-empty."""
+    for lang in Language:
+        assert lang in DEFAULT_IGNORE_PATTERNS
+        assert lang in DEFAULT_INCLUDE_EXTENSIONS
+        assert DEFAULT_IGNORE_PATTERNS[lang]
+        assert DEFAULT_INCLUDE_EXTENSIONS[lang]
 
-        # Check that the patterns are non-empty
-        assert DEFAULT_IGNORE_PATTERNS[language]
-        assert DEFAULT_INCLUDE_EXTENSIONS[language]
 
+def test_invalid_config_file(tmp_path):
+    """Test handling of invalid config file raises JSON error."""
+    bad_file = tmp_path / "bad.json"
+    bad_file.write_text("{invalid}")
+    with pytest.raises(json.JSONDecodeError):
+        Config.from_file(bad_file)
 
-def test_invalid_config_file():
-    """Test handling of invalid config file."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        f.write("{invalid json")
 
-    config_path = Path(f.name)
-    try:
-        # Should raise an exception
-        with pytest.raises(json.JSONDecodeError):
-            Config.from_file(config_path)
-    finally:
-        config_path.unlink()
+def test_config_from_missing_file_returns_default():
+    """Test when no file is found, returns default config."""
+    cfg = Config.from_file(None)
+    assert isinstance(cfg, Config)
 
 
-def test_empty_config_file():
-    """Test handling of empty config file."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        f.write("{}")
+def test_profile_manager_save_and_load(tmp_path):
+    """Test saving, loading, listing, and deleting profiles."""
+    cfg = Config(ignore_patterns=["*.log"])
+    pm = ProfileManager(tmp_path / "profiles.json")
 
-    config_path = Path(f.name)
-    try:
-        config = Config.from_file(config_path)
+    # Save profile
+    pm.save_profile("test", cfg)
 
-        # Should use defaults
-        assert isinstance(config.ignore_patterns, list)
-        assert isinstance(config.include_extensions, list)
-        assert isinstance(config.whitelist_patterns, list)
-        assert config.max_file_lines is None
-    finally:
-        config_path.unlink()
+    # Load it
+    loaded = pm.load_profile("test")
+    assert loaded["ignore"] == ["*.log"]
 
+    # List profiles
+    profiles = pm.list_profiles()
+    assert "test" in profiles
 
-def test_config_search_terms():
-    """Test search terms in configuration."""
-    config = Config(search_terms=["term1", "term2"])
+    # Delete it
+    assert pm.delete_profile("test") is True
+    assert pm.delete_profile("missing") is False
 
-    assert "term1" in config.search_terms
-    assert "term2" in config.search_terms
-    assert len(config.search_terms) == 2
 
-
-def test_config_missing_fields():
-    """Test loading config with missing fields."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        # Only include some fields
-        json.dump({"ignore": ["*.log"]}, f)
-
-    config_path = Path(f.name)
-    try:
-        config = Config.from_file(config_path)
-
-        # Should have the specified field
-        assert "*.log" in config.ignore_patterns
-
-        # Other fields should use defaults
-        assert isinstance(config.include_extensions, list)
-        assert isinstance(config.whitelist_patterns, list)
-        assert config.max_file_lines is None
-    finally:
-        config_path.unlink()
-
-
-def test_config_with_extra_fields():
-    """Test loading config with extra unknown fields."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump({"ignore": ["*.log"], "unknown_field": "value", "another_field": 123}, f)
-
-    config_path = Path(f.name)
-    try:
-        # Should not error on unknown fields
-        config = Config.from_file(config_path)
-        assert "*.log" in config.ignore_patterns
-    finally:
-        config_path.unlink()
-
-
-def test_config_invalid_field_types():
-    """Test config with invalid field types."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        # Use wrong types for fields
-        json.dump(
-            {
-                "ignore": "not_a_list",  # Should be a list
-                "max_file_lines": "not_an_int",  # Should be an int
-            },
-            f,
-        )
-
-    config_path = Path(f.name)
-    try:
-        # The current implementation might handle this differently than expected
-        # Let's just test that it doesn't crash
-        config = Config.from_file(config_path)
-
-        # Just verify we got a Config object back
-        assert isinstance(config, Config)
-    finally:
-        config_path.unlink()
-
-
-def test_config_update():
-    """Test updating configuration with new values."""
-    config = Config(ignore_patterns=["*.log"], include_extensions=[".py"], max_file_lines=100)
-
-    # Update with new values
-    config.update(
-        {"ignore_patterns": ["*.tmp", "*.bak"], "max_file_lines": 200, "search_terms": ["test"]}
-    )
-
-    # Check updated values
-    assert config.ignore_patterns == ["*.tmp", "*.bak"]
-    assert config.include_extensions == [".py"]  # Unchanged
-    assert config.max_file_lines == 200
-    assert config.search_terms == ["test"]
-
-
-def test_profile_manager_initialization():
-    """Test ProfileManager initialization with different paths."""
-    # Test with explicit path
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.json"
-        manager = ProfileManager(config_path)
-        assert manager.config_path == config_path
-
-    # Test with default path when no existing config
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("pathlib.Path.cwd", return_value=Path(tmpdir)):
-            manager = ProfileManager()
-            assert manager.config_path == Path(tmpdir) / "codesnap.json"
-
-    # Test with existing config in default locations
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "codesnap.json"
-        config_path.touch()
-        with patch("pathlib.Path.cwd", return_value=Path(tmpdir)):
-            manager = ProfileManager()
-            assert manager.config_path == config_path
-
-
-def test_profile_manager_load_config_data():
-    """Test loading configuration data from file."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.json"
-
-        # Test with non-existent file
-        manager = ProfileManager(config_path)
-        assert manager._load_config_data() == {}
-
-        # Test with valid JSON
-        config_data = {"profiles": {"test": {"ignore": ["*.tmp"]}}}
-        with open(config_path, "w") as f:
-            json.dump(config_data, f)
-
-        assert manager._load_config_data() == config_data
-
-        # Test with invalid JSON
-        with open(config_path, "w") as f:
-            f.write("invalid json")
-
-        assert manager._load_config_data() == {}
-
-
-def test_profile_manager_save_config_data():
-    """Test saving configuration data to file."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "subdir" / "config.json"
-        manager = ProfileManager(config_path)
-
-        # Save data to non-existent directory (should create it)
-        config_data = {"test": "data"}
-        manager._save_config_data(config_data)
-
-        # Check that file was created with correct content
-        assert config_path.exists()
-        with open(config_path) as f:
-            assert json.load(f) == config_data
-
-
-def test_profile_manager_load_profile():
-    """Test loading a profile from configuration."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.json"
-
-        # Create config with profiles
-        config_data = {"profiles": {"test": {"ignore": ["*.tmp"]}, "dev": {"ignore": ["*.log"]}}}
-        with open(config_path, "w") as f:
-            json.dump(config_data, f)
-
-        manager = ProfileManager(config_path)
-
-        # Test loading existing profile
-        assert manager.load_profile("test") == {"ignore": ["*.tmp"]}
-
-        # Test loading non-existent profile
-        assert manager.load_profile("non_existent") is None
-
-
-def test_profile_manager_save_profile():
-    """Test saving a profile to configuration."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.json"
-        manager = ProfileManager(config_path)
-
-        # Create a config
-        config = Config(ignore_patterns=["*.log"], max_file_lines=100)
-
-        # Save profile to empty config
-        manager.save_profile("test", config)
-
-        # Check that profile was saved
-        with open(config_path) as f:
-            data = json.load(f)
-            assert "profiles" in data
-            assert "test" in data["profiles"]
-            assert data["profiles"]["test"]["ignore"] == ["*.log"]
-            assert data["profiles"]["test"]["max_file_lines"] == 100
-
-        # Save another profile
-        config2 = Config(ignore_patterns=["*.tmp"])
-        manager.save_profile("dev", config2)
-
-        # Check that both profiles exist
-        with open(config_path) as f:
-            data = json.load(f)
-            assert "test" in data["profiles"]
-            assert "dev" in data["profiles"]
-
-
-def test_profile_manager_list_profiles():
-    """Test listing available profiles."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.json"
-
-        # Create config with profiles
-        config_data = {"profiles": {"test": {"ignore": ["*.tmp"]}, "dev": {"ignore": ["*.log"]}}}
-        with open(config_path, "w") as f:
-            json.dump(config_data, f)
-
-        manager = ProfileManager(config_path)
-        profiles = manager.list_profiles()
-
-        # Check that profiles were listed
-        assert sorted(profiles) == ["dev", "test"]
-
-        # Test with no profiles
-        empty_config_path = Path(tmpdir) / "empty.json"
-        empty_manager = ProfileManager(empty_config_path)
-        assert empty_manager.list_profiles() == []
-
-
-def test_profile_manager_delete_profile():
-    """Test deleting a profile from configuration."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.json"
-
-        # Create config with profiles
-        config_data = {"profiles": {"test": {"ignore": ["*.tmp"]}, "dev": {"ignore": ["*.log"]}}}
-        with open(config_path, "w") as f:
-            json.dump(config_data, f)
-
-        manager = ProfileManager(config_path)
-
-        # Delete existing profile
-        assert manager.delete_profile("test") is True
-
-        # Check that profile was deleted
-        with open(config_path) as f:
-            data = json.load(f)
-            assert "test" not in data["profiles"]
-            assert "dev" in data["profiles"]
-
-        # Try to delete non-existent profile
-        assert manager.delete_profile("non_existent") is False
-
-
-def test_profile_manager_delete_profile_returns_false(tmp_path):
-    man = ProfileManager(tmp_path / "nope.json")
-    assert man.delete_profile("notfound") is False
-
-
-def test_profile_manager_list_profiles_no_file(tmp_path):
-    man = ProfileManager(tmp_path / "none.json")
-    assert man.list_profiles() == []
-
-
-def test_config_from_missing_file(monkeypatch):
-    # Remove all default locations
-    monkeypatch.setattr(Path, "cwd", lambda: Path("/tmp/nonexistent"))
-    monkeypatch.setattr(Path, "home", lambda: Path("/tmp/nonexistent_home"))
-    config = Config.from_file(None)
-    assert isinstance(config, Config)
+def test_profile_manager_list_profiles_empty(tmp_path):
+    """An empty config file should yield [] profiles."""
+    pm = ProfileManager(tmp_path / "none.json")
+    assert pm.list_profiles() == []

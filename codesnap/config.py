@@ -1,4 +1,9 @@
-"""Configuration management for codesnap."""
+"""Configuration management for codesnap.
+
+This module defines configuration structures and profile management used by codesnap.
+Configurations determine which files are included or excluded in snapshots,
+and profiles allow saving/reusing commonly used settings.
+"""
 
 import json
 from dataclasses import dataclass, field
@@ -8,7 +13,7 @@ from typing import Any
 
 
 class Language(Enum):
-    """Supported programming languages."""
+    """Enumeration of supported programming languages."""
 
     JAVASCRIPT = "javascript"
     TYPESCRIPT = "typescript"
@@ -17,7 +22,17 @@ class Language(Enum):
 
 @dataclass
 class Config:
-    """Configuration for code snapshot generation."""
+    """Configuration for code snapshot generation.
+
+    Attributes:
+        ignore_patterns (list[str]): Glob-style patterns to ignore during scanning.
+        include_extensions (list[str]): File extensions to include.
+        whitelist_patterns (list[str]): File patterns to always include, regardless of ignore.
+        exclude_patterns (list[str]): File patterns to always exclude.
+        max_file_lines (int | None): (deprecated) Maximum number of lines per file to include.
+        max_line_length (int | None): (deprecated) Maximum length per line.
+        search_terms (list[str]): Only include files containing these search terms in name.
+    """
 
     ignore_patterns: list[str] = field(default_factory=list)
     include_extensions: list[str] = field(default_factory=list)
@@ -29,7 +44,18 @@ class Config:
 
     @classmethod
     def from_file(cls, path: str | Path | None) -> "Config":
-        """Load configuration from a JSON file."""
+        """Load configuration from JSON file.
+
+        If no path is provided, attempts to load from default locations:
+        - `codesnap.json` in current directory
+        - `~/.config/codesnap/config.json`
+
+        Args:
+            path (str | Path | None): Path to JSON config file, or None for auto-search.
+
+        Returns:
+            Config: A configuration instance.
+        """
         if not path:
             # Try default locations
             default_paths = [
@@ -41,8 +67,7 @@ class Config:
                     path = default_path
                     break
             else:
-                # No config file found
-                return cls()
+                return cls()  # No file found, return empty config
 
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
@@ -58,7 +83,11 @@ class Config:
         )
 
     def to_dict(self) -> dict:
-        """Convert configuration to dictionary."""
+        """Convert configuration to dictionary.
+
+        Returns:
+            dict: Dictionary representation of configuration.
+        """
         return {
             "ignore": self.ignore_patterns,
             "include_extensions": self.include_extensions,
@@ -70,42 +99,67 @@ class Config:
         }
 
     def update(self, updates: dict[str, Any]) -> None:
-        """Update configuration with new values."""
+        """Update configuration fields.
+
+        Args:
+            updates (dict[str, Any]): Dictionary of config values to update.
+        """
         for key, value in updates.items():
             if hasattr(self, key) and value is not None:
                 setattr(self, key, value)
 
 
 class ProfileManager:
-    """Manages configuration profiles."""
+    """Manages configuration profiles stored in JSON files.
+
+    Profiles allow users to save commonly used snapshot settings
+    and recall them later by name.
+
+    Attributes:
+        config_path (Path): Path where profiles are stored.
+    """
 
     def __init__(self, config_path: str | Path | None = None):
-        """Initialize the profile manager."""
+        """Initialize the profile manager.
+
+        Args:
+            config_path (str | Path | None): Path to config file (optional).
+                If None, uses default locations.
+        """
         self.config_path = self._resolve_config_path(config_path)
 
     def _resolve_config_path(self, config_path: str | Path | None) -> Path:
-        """Resolve the configuration file path."""
+        """Resolve the profile configuration file path.
+
+        Args:
+            config_path (str | Path | None): Provided config path or None.
+
+        Returns:
+            Path: Path to configuration file.
+        """
         if config_path:
             return Path(config_path)
 
-        # Try default locations
+        # Default locations
         default_paths = [
             Path.cwd() / "codesnap.json",
             Path.home() / ".config" / "codesnap" / "config.json",
         ]
-
         for path in default_paths:
             if path.exists():
                 return path
 
-        # If no existing config file, use the first default path
+        # Fallback: first default path
         return default_paths[0]
 
     def _load_config_data(self) -> dict[str, Any]:
-        """Load the configuration data from file."""
+        """Load configuration data from file.
+
+        Returns:
+            dict[str, Any]: Loaded config data (empty dict if file missing or invalid).
+        """
         if not self.config_path.exists():
             return {}
-
         try:
             with open(self.config_path, encoding="utf-8") as f:
                 return json.load(f)
@@ -113,53 +167,71 @@ class ProfileManager:
             return {}
 
     def _save_config_data(self, data: dict[str, Any]) -> None:
-        """Save configuration data to file."""
-        # Ensure directory exists
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        """Save configuration data to file.
 
+        Args:
+            data (dict[str, Any]): Profiles to save.
+        """
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     def load_profile(self, profile_name: str) -> dict[str, Any] | None:
-        """Load a profile from the configuration file."""
+        """Load a saved profile.
+
+        Args:
+            profile_name (str): Profile identifier.
+
+        Returns:
+            dict[str, Any] | None: Profile configuration dictionary, or None if missing.
+        """
         data = self._load_config_data()
         profiles = data.get("profiles", {})
         return profiles.get(profile_name)
 
     def save_profile(self, profile_name: str, config: Config) -> None:
-        """Save a profile to the configuration file."""
-        data = self._load_config_data()
+        """Save a configuration as a profile.
 
-        # Ensure profiles section exists
+        Args:
+            profile_name (str): Name of the profile.
+            config (Config): Configuration object to save.
+        """
+        data = self._load_config_data()
         if "profiles" not in data:
             data["profiles"] = {}
 
-        # Add or update profile
         data["profiles"][profile_name] = config.to_dict()
-
-        # Save back to file
         self._save_config_data(data)
 
     def list_profiles(self) -> list[str]:
-        """List available profiles."""
+        """List available profiles.
+
+        Returns:
+            list[str]: Names of available profiles.
+        """
         data = self._load_config_data()
         profiles = data.get("profiles", {})
         return list(profiles.keys())
 
     def delete_profile(self, profile_name: str) -> bool:
-        """Delete a profile from the configuration file."""
+        """Delete a profile from storage.
+
+        Args:
+            profile_name (str): Name of profile to remove.
+
+        Returns:
+            bool: True if profile deleted, False if not found.
+        """
         data = self._load_config_data()
         profiles = data.get("profiles", {})
-
         if profile_name in profiles:
             del profiles[profile_name]
             self._save_config_data(data)
             return True
-
         return False
 
 
-# Default patterns for different languages
+# Default ignore patterns by language
 DEFAULT_IGNORE_PATTERNS = {
     Language.JAVASCRIPT: [
         "node_modules/",
@@ -230,7 +302,7 @@ DEFAULT_IGNORE_PATTERNS = {
     ],
 }
 
-# Default file extensions to include
+# Default file extensions per language
 DEFAULT_INCLUDE_EXTENSIONS = {
     Language.JAVASCRIPT: [".js", ".jsx", ".json", ".md", ".yml", ".yaml"],
     Language.TYPESCRIPT: [".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".yml", ".yaml"],
