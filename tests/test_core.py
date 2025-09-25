@@ -1,4 +1,5 @@
 """Tests for core functionality (aligned with simplified codesnap.core)."""
+
 import tempfile
 import time
 import os
@@ -51,7 +52,12 @@ def test_file_sorting(temp_project):
     sorted_files = snapper._sort_files(files)
     assert sorted_files  # not empty
     # important files early
-    assert sorted_files[0].name in ("pyproject.toml", "requirements.txt", "setup.py", "package.json")
+    assert sorted_files[0].name in (
+        "pyproject.toml",
+        "requirements.txt",
+        "setup.py",
+        "package.json",
+    )
 
 
 def test_custom_config(temp_project):
@@ -117,6 +123,7 @@ def test_json_output_format(temp_project):
     snapper = CodeSnapshotter(temp_project, Language.PYTHON)
     snap = snapper.create_snapshot(output_format=OutputFormat.JSON)
     import json
+
     data = json.loads(snap.content)
     assert "project" in data
     assert "language" in data

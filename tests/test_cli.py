@@ -1,4 +1,5 @@
 """Tests for CLI functionality with simplified codesnap.cli."""
+
 import tempfile
 from pathlib import Path
 import pytest
@@ -52,9 +53,7 @@ def test_cli_clipboard_failure(monkeypatch, runner, temp_python_project):
 
 def test_cli_output_file(runner, temp_python_project, tmp_path):
     output_file = tmp_path / "snapshot.txt"
-    result = runner.invoke(
-        main, [str(temp_python_project), "-l", "python", "-o", str(output_file)]
-    )
+    result = runner.invoke(main, [str(temp_python_project), "-l", "python", "-o", str(output_file)])
     assert result.exit_code == 0
     assert "Snapshot written to" in result.output
     assert output_file.exists()

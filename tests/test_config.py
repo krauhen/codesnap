@@ -1,4 +1,5 @@
 """Tests for configuration functionality (aligned with simplified codesnap.config)."""
+
 import json
 import tempfile
 import pytest

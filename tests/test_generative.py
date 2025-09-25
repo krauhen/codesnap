@@ -3,6 +3,7 @@ import pytest
 from click.testing import CliRunner
 from codesnap.cli import main
 
+
 @pytest.fixture
 def python_sandbox(tmp_path):
     """
@@ -37,6 +38,7 @@ def python_sandbox(tmp_path):
     yield root
     shutil.rmtree(root)
 
+
 @pytest.mark.parametrize(
     "rel_path, expected_snippet",
     [
@@ -58,6 +60,7 @@ def test_python_sandbox_files_exist_and_content(python_sandbox, rel_path, expect
     content = file_path.read_text()
     assert expected_snippet in content
 
+
 def test_cli_generates_snapshot_markdown_by_default(python_sandbox):
     runner = CliRunner()
     result = runner.invoke(main, [str(python_sandbox), "-l", "python"])
@@ -66,6 +69,7 @@ def test_cli_generates_snapshot_markdown_by_default(python_sandbox):
     assert "def foo" in result.output
     assert "Directory Structure" in result.output
     assert "File Contents" in result.output
+
 
 def test_cli_hidden_files_are_included_by_default(python_sandbox):
     runner = CliRunner()

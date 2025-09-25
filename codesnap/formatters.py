@@ -86,9 +86,19 @@ class SnapshotFormatter:
 
         # Character schemes
         if style == "ascii":
-            chars = {"branch": "|-- ", "last_branch": "`-- ", "indent": "|   ", "last_indent": "    "}
+            chars = {
+                "branch": "|-- ",
+                "last_branch": "`-- ",
+                "indent": "|   ",
+                "last_indent": "    ",
+            }
         else:
-            chars = {"branch": "├── ", "last_branch": "└── ", "indent": "│   ", "last_indent": "    "}
+            chars = {
+                "branch": "├── ",
+                "last_branch": "└── ",
+                "indent": "│   ",
+                "last_indent": "    ",
+            }
 
         # Recursively format nodes
         lines.extend(
@@ -239,7 +249,10 @@ class SnapshotFormatter:
                             lines.append(f"\n... (truncated, {sum(1 for _ in f) + 1} more lines)")
                             break
                         if max_line_length and len(line) > max_line_length:
-                            lines.append(line[:max_line_length] + f"... ({len(line) - max_line_length} more chars)")
+                            lines.append(
+                                line[:max_line_length]
+                                + f"... ({len(line) - max_line_length} more chars)"
+                            )
                         else:
                             lines.append(line)
                     return "".join(lines)

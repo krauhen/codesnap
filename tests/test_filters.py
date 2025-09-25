@@ -1,4 +1,5 @@
 """Tests for file filtering."""
+
 import tempfile
 import os
 import pytest
@@ -180,6 +181,7 @@ def test_filter_with_complex_ignore_patterns(temp_project):
     test_path = temp_project / "test"
     # Clean up if test reruns
     import shutil
+
     if test_path.exists():
         shutil.rmtree(test_path)
     test_path.mkdir()

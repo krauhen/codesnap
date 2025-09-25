@@ -108,9 +108,7 @@ def output_option(f):
         "-c",
         "--clipboard",
         is_flag=True,
-        help=(
-            "Copy the snapshot directly to clipboard (recommended for LLM workflow)."
-        ),
+        help=("Copy the snapshot directly to clipboard (recommended for LLM workflow)."),
     )(f)
     return f
 
@@ -390,9 +388,7 @@ def run_cli(
         path, lang_enum, config, model_encoding, count_tokens=count_tokens
     )
 
-    file_summaries = _maybe_summarize(
-        snapshotter, summarize, llm_provider, summary_sentences
-    )
+    file_summaries = _maybe_summarize(snapshotter, summarize, llm_provider, summary_sentences)
 
     snapshot = snapshotter.create_snapshot(
         max_tokens=max_tokens,
@@ -420,9 +416,7 @@ def _detect_language_or_exit(path: Path) -> str:
     """
     detected_lang = detect_language(path)
     if not detected_lang:
-        console.print(
-            "[red]Error:[/red] Could not detect language. Specify with -l/--language."
-        )
+        console.print("[red]Error:[/red] Could not detect language. Specify with -l/--language.")
         sys.exit(1)
     return detected_lang
 

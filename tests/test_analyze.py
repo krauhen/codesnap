@@ -1,4 +1,5 @@
 """Tests for import analysis functionality."""
+
 import tempfile
 import pytest
 from pathlib import Path
@@ -15,21 +16,15 @@ def temp_project():
         (root / "main.py").write_text(
             "import utils\nfrom helpers import helper_func\nfrom .local_module import local_func\n"
         )
-        (root / "utils.py").write_text(
-            "import os\nimport sys\nfrom helpers import another_func\n"
-        )
+        (root / "utils.py").write_text("import os\nimport sys\nfrom helpers import another_func\n")
         (root / "helpers.py").write_text(
             "import math\ndef helper_func():\n    pass\ndef another_func():\n    pass\n"
         )
         (root / "local_module.py").write_text("def local_func():\n    pass\n")
 
         # Circular import
-        (root / "circular1.py").write_text(
-            "from circular2 import func2\ndef func1():\n    pass\n"
-        )
-        (root / "circular2.py").write_text(
-            "from circular1 import func1\ndef func2():\n    pass\n"
-        )
+        (root / "circular1.py").write_text("from circular2 import func2\ndef func1():\n    pass\n")
+        (root / "circular2.py").write_text("from circular1 import func1\ndef func2():\n    pass\n")
 
         # ---------------- JavaScript files ----------------
         (root / "app.js").write_text(
@@ -109,9 +104,7 @@ def test_analyze_project(temp_project):
 
     # Circular dependencies should include circular1.py and circular2.py
     circulars = result["circular_dependencies"]
-    assert any(
-        {"circular1.py", "circular2.py"}.issubset(set(cycle)) for cycle in circulars
-    )
+    assert any({"circular1.py", "circular2.py"}.issubset(set(cycle)) for cycle in circulars)
 
     # orphaned.py should be reported
     assert any("orphaned.py" in f for f in result["orphaned_files"])

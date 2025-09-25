@@ -32,6 +32,7 @@ class Snapshot:
         truncated (bool): Whether snapshot was truncated due to token budget.
         metadata (dict[str, Any]): Additional metadata such as project name or directory tree.
     """
+
     content: str
     file_count: int
     token_count: int

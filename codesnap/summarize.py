@@ -125,7 +125,9 @@ class AnthropicProvider(LLMProvider):
             str: LLM-generated summary or error string.
         """
         if not self.api_key:
-            raise ValueError("Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable.")
+            raise ValueError(
+                "Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable."
+            )
 
         file_ext = Path(file_path).suffix
         prompt = f"Summarize this {file_ext} code in {num_sentences} sentences:\n\n{code}"

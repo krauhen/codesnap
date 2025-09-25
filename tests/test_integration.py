@@ -1,9 +1,11 @@
 """Integration tests for codesnap."""
+
 import tempfile
 import pytest
 from pathlib import Path
 from codesnap import CodeSnapshotter
 from codesnap.config import Config, Language
+
 
 @pytest.fixture
 def complex_project():
@@ -25,6 +27,7 @@ def complex_project():
         (root / "build" / "output.bin").write_text("binary")
         yield root
 
+
 def test_integration_with_search_terms(complex_project):
     config = Config(search_terms=["main"])
     snapshotter = CodeSnapshotter(complex_project, Language.PYTHON, config)
@@ -33,6 +36,7 @@ def test_integration_with_search_terms(complex_project):
     assert "test_main.py" in snapshot.content
     assert "helpers.py" not in snapshot.content
     assert "README.md" not in snapshot.content
+
 
 def test_integration_with_ignore_patterns(complex_project):
     config = Config(ignore_patterns=["*.py", "*.md", "tests/", "docs/", "src/"])

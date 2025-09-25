@@ -1,4 +1,5 @@
 """Tests for output formatting."""
+
 import tempfile
 import pytest
 import os
@@ -389,7 +390,10 @@ def test_format_file_handles_exception_open(monkeypatch, tmp_path):
     f = tmp_path / "err.py"
     f.write_text("1")
     formatter = SnapshotFormatter(tmp_path, Language.PYTHON)
-    def broken(*a, **k): raise Exception("x")
+
+    def broken(*a, **k):
+        raise Exception("x")
+
     monkeypatch.setattr("builtins.open", broken)
     out = formatter.format_file(f)
     assert "Error reading file:" in out
@@ -399,6 +403,9 @@ def test_format_file_permission_error(monkeypatch, tmp_path):
     f = tmp_path / "no_access.py"
     f.write_text("print('x')")
     formatter = SnapshotFormatter(tmp_path, Language.PYTHON)
-    def broken(*a, **k): raise PermissionError("perm")
+
+    def broken(*a, **k):
+        raise PermissionError("perm")
+
     monkeypatch.setattr("builtins.open", broken)
     assert "Error reading file: perm" in formatter.format_file(f)
