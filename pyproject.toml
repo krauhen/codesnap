@@ -1,6 +1,6 @@
 [project]
 name = "codesnap"
-version = "0.0.1"
+version = "0.2.0"
 description = "Generate LLM-friendly code snapshots with smart filtering and clipboard support"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11,<3.14"
